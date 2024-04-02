@@ -1,0 +1,9 @@
+{
+    "idf.adapterTargetName": "esp32s3",
+    "C_Cpp.errorSquiggles": "disabled",
+    "files.associations": {
+        "string.h": "c",
+        "system_error": "c"
+    },
+    "idf.portWin": "COM7"
+}
