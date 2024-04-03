@@ -163,6 +163,9 @@ void ink_init_list_ble_addr(ink_list_ble_addr_t* list_ble_scan) {
         memset(list_ble_scan->addr_scan[i].name, '\0',strlen(list_ble_scan->addr_scan[i].name));
         memset(list_ble_scan->addr_scan[i].addr, 0, sizeof(esp_bd_addr_t));
         list_ble_scan->addr_scan[i].scan_ok = false;
+        list_ble_scan->addr_scan[i].cfg_tem.ok = 0;
+        list_ble_scan->addr_scan[i].cfg_tem.tmax = 0;
+        list_ble_scan->addr_scan[i].cfg_tem.tmin = 0;
     }
 }
 
@@ -209,6 +212,21 @@ int ink_check_exist_ble(esp_bd_addr_t addr1, ink_list_ble_addr_t list_ble_addr){
     }
     return 0; // NOT FOUND ADDR SCAN
 }
+
+int ink_check_indx_ble(esp_bd_addr_t addr1, ink_list_ble_addr_t list_ble_addr, int* idx){
+    char addr_str1[20]={0};
+    char addr_dev[20]={0};
+    ink_esp_bd_addr__to__string(addr1,addr_str1);
+    for (size_t i = 0; i < list_ble_addr.num_ble; i++) {
+        ink_esp_bd_addr__to__string(list_ble_addr.addr_scan[i].addr,addr_dev);
+        if ( strcmp(addr_str1, addr_dev)==0){
+            *idx = i;
+            return 1; // FOUND ADDR SCAN
+        }
+    }
+    return 0; // NOT FOUND ADDR SCAN
+}
+
 
 
 

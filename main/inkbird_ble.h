@@ -162,6 +162,21 @@ int ink_check_exist_ble(esp_bd_addr_t addr1, ink_list_ble_addr_t list_ble_addr);
 
 
 /**
+ * Comprueba si una dirección BLE dada está presente en una lista de direcciones BLE y devuelve su índice.
+ *
+ * Esta función toma una dirección BLE `addr1`, una lista de direcciones BLE `list_ble_addr`,
+ * y un puntero a un entero `idx`. Busca la dirección `addr1` en la lista y, si se encuentra, 
+ * asigna su índice a `idx`.
+ *
+ * @param addr1 La dirección BLE que se desea buscar en la lista.
+ * @param list_ble_addr La lista de direcciones BLE en la que se realizará la búsqueda.
+ * @param idx Puntero a un entero donde se almacenará el índice de la dirección BLE encontrada.
+ * @return Devuelve 1 si la dirección BLE `addr1` se encuentra en la lista `list_ble_addr`,
+ *         y asigna su índice a `idx`. Devuelve 0 si la dirección BLE no se encuentra.
+ */
+int ink_check_indx_ble(esp_bd_addr_t addr1, ink_list_ble_addr_t list_ble_addr, int* idx);
+
+/**
  * Verifica si la temperatura medida está dentro de los límites configurados.
  *
  * Esta función toma datos de un sensor BLE, verifica si la configuración de temperatura está activada,

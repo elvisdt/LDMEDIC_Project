@@ -150,8 +150,8 @@ ink_list_ble_data_t list_ble_data={0};
 
 
 /*--> global main variables <--*/
-uint8_t     delay_tmax = 10;
-uint8_t     delay_tmin = 5;
+uint8_t     delay_tmax = 20;
+uint8_t     delay_tmin = 20;
 
 uint8_t     delay_info = 5;
 uint32_t    Info_time=0;
@@ -752,12 +752,13 @@ void SMS_check(void){
                     ret_sms= ink_string__to__esp_bd_addr(mac_str,&addr_aux);
                     ESP_LOGI(TAG, "SMS mac err: %d",ret_sms);
                     if (ret_sms==1){
-                        ret_sms=ink_check_exist_ble(addr_aux,list_ble_device);
+
+                        int idx_list =-1;
+                        ret_sms=ink_check_indx_ble(addr_aux,list_ble_device,&idx_list);
                         ESP_LOGI(TAG, "exist err: %d",ret_sms);
-                        int num_ble_reg = list_ble_device.num_ble;
                         if (ret_sms==1){
                             ink_cfg_tem_t cfg_tem_aux={1,tmax,tmin};
-                            list_ble_device.addr_scan[num_ble_reg-1].cfg_tem = cfg_tem_aux;
+                            list_ble_device.addr_scan[idx_list].cfg_tem = cfg_tem_aux;
                              ESP_LOGI(TAG_SMS,"BLE CFG SUCCESFULL");
                         }else{
                             ESP_LOGW(TAG_SMS,"BLE CFG FAIL- DEVICE NO EXIST");
