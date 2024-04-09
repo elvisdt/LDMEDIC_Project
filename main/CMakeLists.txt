@@ -1,7 +1,6 @@
 set(srcs "main.c"
          "ota_modem.c"
          "json_parser.c"
-         "inkbird_ble.c"
          "main_funcs.c"
          )
 
@@ -12,6 +11,8 @@ set(ota_modem_srcs
     "OTA_MODEM/ota_global.c"
     "OTA_MODEM/ota_headers.c")
 
+set(ink_srcs 
+    "INKBIRD/inkbird_ble.c")
 
 #set(ota_ble_srcs  "OTA_BLE/gap.c"   "OTA_BLE/gatt_svr.c")
 set(EG915_srcs  
@@ -20,7 +21,7 @@ set(EG915_srcs
 
 
 idf_component_register(
-    SRCS ${srcs} ${ota_modem_srcs} ${EG915_srcs} #${ota_ble_srcs}
-    INCLUDE_DIRS "." "OTA_MODEM" "EG915" #"OTA_BLE"
+    SRCS ${srcs} ${ota_modem_srcs} ${EG915_srcs} ${ink_srcs}#${ota_ble_srcs}
+    INCLUDE_DIRS "." "OTA_MODEM" "EG915" "INKBIRD" #"OTA_BLE"
 )
 

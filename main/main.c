@@ -7,10 +7,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
+#include <freertos/event_groups.h>
 #include <esp_event.h>
 
-#include <esp_system.h>
 #include <sdkconfig.h>
+#include <esp_system.h>
 #include <sys/time.h>
 #include <time.h>
 #include <esp_timer.h>
@@ -18,6 +19,15 @@
 #include "esp_ota_ops.h"
 #include <nvs.h>
 #include <nvs_flash.h>
+
+/*------ble devices----*/
+#include "esp_nimble_hci.h"
+#include "nimble/nimble_port.h"
+#include "nimble/nimble_port_freertos.h"
+#include "host/ble_hs.h"
+#include "host/ble_gap.h"
+#include "services/gap/ble_svc_gap.h"
+
 
 #include <cJSON.h>
 
@@ -27,6 +37,8 @@
 #include "ota_modem.h"
 #include "main.h"
 #include "inkbird_ble.h"
+#include "jason_parser.h"
+
 
 #include "modem_aux.h"
 
@@ -40,28 +52,16 @@
 // #include "gap.h"
 // #include "gatt_svr.h"
 
-/*------ble devices----*/
-#include "esp_bt.h"
-#include "esp_gap_ble_api.h"
-#include "esp_gattc_api.h"
-#include "esp_gatt_defs.h"
-#include "esp_bt_main.h"
-#include "esp_gatt_common_api.h"
 
 /***********************************************
  * DEFINES
 ************************************************/
 
-#define TAG          "MAIN"
+#define TAG             "MAIN"
 #define MAX_ATTEMPS     3
 
-#define WAIT_MS(x)		vTaskDelay(pdMS_TO_TICKS(x))
-#define WAIT_S(x)		vTaskDelay(pdMS_TO_TICKS(x*1e3))
 
 #define MASTER_TOPIC_MQTT   "LDMEDIC"
-
-
-#define	INIT_DELAY_BLE		3
 
 #define NAMESPACE_NVS		"storage"
 #define KEY_BLE_LIST		"BLE_LIST"
@@ -69,24 +69,17 @@
 #define KEY_BLE_TIME		"BLET"
 
 
-#define PROFILE_A_APP_ID 	0
-#define SCAN_DURATION       30 
-
 /*----> >-----*/
 #define     PIN_CIRCULINA      GPIO_NUM_11
+
+#define	INIT_DELAY_BLE		3
+
+#define WAIT_MS(x)		vTaskDelay(pdMS_TO_TICKS(x))
+#define WAIT_S(x)		vTaskDelay(pdMS_TO_TICKS(x*1e3))
 
 /***********************************************
  * STRUCTURES
 ************************************************/
-static esp_ble_scan_params_t ble_scan_params = {
-    // Inicializa aquí los parámetros de escaneo BLE
-    .scan_type              = BLE_SCAN_TYPE_ACTIVE,
-    .own_addr_type          = BLE_ADDR_TYPE_PUBLIC,
-    .scan_filter_policy     = BLE_SCAN_FILTER_ALLOW_ALL,
-    .scan_interval          = 0x0100,//100ms , range  0x0004 to 0x4000
-    .scan_window            = 0x0050,//50ms , range  0x0004 to 0x4000
-    .scan_duplicate         = BLE_SCAN_DUPLICATE_ENABLE
-};
 
 
 /***********************************************
@@ -113,6 +106,14 @@ TaskHandle_t ALARM_Task_handle      =   NULL;
 cJSON *doc;
 char * output;
 
+/*--> NVS <---*/
+nvs_handle_t storage_nvs_handle;
+uint16_t delay_ble=INIT_DELAY_BLE;
+uint8_t     delay_tmax = 20;
+uint8_t     delay_tmin = 20;
+
+size_t BLE_size  = sizeof(ink_list_ble_info_t);
+size_t MQTT_size = 50;
 
 /*---> Aux Mememory <---*/
 uint8_t aux_buff_mem[BUF_SIZE_MODEM];
@@ -138,41 +139,29 @@ uint32_t current_time=0;
 int mqtt_idx = 0; 		// 0->5
 
 
-/*--> ble varibles<--*/
-time_t unix_time=0;
-static bool scanning = false;
-static size_t sen_ble_count = 0;
+/*--> gloabl main varibles<--*/
+ink_list_ble_info_t   list_ble_info={0};
+ink_list_ble_report_t list_ble_report={0};
 
-uint16_t delay_ble=INIT_DELAY_BLE;
-size_t BLE_size  = sizeof(ink_list_ble_addr_t);
-static ink_list_ble_addr_t list_ble_device={0};
-ink_list_ble_data_t list_ble_data={0};
-
-
-/*--> global main variables <--*/
-uint8_t     delay_tmax = 20;
-uint8_t     delay_tmin = 20;
-
-uint8_t     delay_info = 5;
 uint32_t    Info_time=0;
 uint32_t    MQTT_read_time=0;
 uint32_t    OTA_md_time=1;
 uint32_t    SMS_time=0;
-
-/*--> NVS <---*/
-nvs_handle_t storage_nvs_handle;
+uint32_t    BLE_time=0;
 
 //size_t BLE_size  = sizeof(ink_list_ble_addr_t);
-size_t MQTT_size = 50;
 char ip_mqtt_connect[50] = ip_MQTT;
+
+
+/*---> ble parameters <---*/
+uint8_t ble_addr_type;
+uint8_t active_scan_process = 0;   // Variable global para habilitar si procesar los eventos de escaneo o no
+int ret_init_scan=0;
 
 /***********************************************
  * FUNCIONTIONS
 ************************************************/
-void BLE_init(void);
-void BLE_scanner_start(void);
-void BLE_scanner_stop(void);
-static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t* param);
+void ble_app_scan(void);
 
 
 void main_cfg_parms(){
@@ -252,7 +241,6 @@ int Active_modem(){
 }
 
 /* ---- INIT NVS ---*/
-
 void Init_NVS_Keys(){
 	/*------------------------------------------------*/
 	ESP_LOGI(TAG,"Init NVS keys of data");
@@ -266,16 +254,14 @@ void Init_NVS_Keys(){
 	
 
 	ESP_LOGI(TAG,"NVS get WMBUS keys");
-
-    
 	nvs_open(NAMESPACE_NVS,NVS_READWRITE,&storage_nvs_handle);
-
 	// Recuperar estructura ink_list_ble_addr_t
-	err = nvs_get_blob(storage_nvs_handle, KEY_BLE_LIST, &list_ble_device, &BLE_size);
+	err = nvs_get_blob(storage_nvs_handle, KEY_BLE_LIST, &list_ble_info, &BLE_size);
 	if(err == ESP_ERR_NVS_NOT_FOUND){
-		ink_init_list_ble_addr(&list_ble_device);
-		nvs_set_blob(storage_nvs_handle, KEY_BLE_LIST, &list_ble_device, sizeof(ink_list_ble_addr_t));
+		ink_clean_list_ble_info(&list_ble_info);
+		nvs_set_blob(storage_nvs_handle, KEY_BLE_LIST, &list_ble_info, sizeof(ink_list_ble_info_t));     
 	}
+
 	err=nvs_get_u16(storage_nvs_handle,KEY_BLE_TIME,&delay_ble);
 	if (err == ESP_ERR_NVS_NOT_FOUND) {
 		delay_ble=INIT_DELAY_BLE;
@@ -288,7 +274,7 @@ void Init_NVS_Keys(){
 		nvs_set_str(storage_nvs_handle,KEY_IP_MQTT,ip_mqtt_connect);
 	}
 	
-	ink_concat_lit_ble(list_ble_device,buff_aux);
+	ink_concat_list_ble(list_ble_info,buff_aux);
 	printf("------------------------\r\n");
 
 	printf("->MQTT:\r\n"
@@ -308,6 +294,110 @@ void Init_NVS_Keys(){
 	//-------------------------------------------------//
 	ESP_LOGI(TAG,"NVS keys recovered succsesfull\r\n");
 	return;
+}
+/****************************************************
+ * BLE PROCESS
+*****************************************************/
+// BLE event handling
+static int ble_gap_event(struct ble_gap_event *event, void *arg){
+
+    if (active_scan_process==0) {
+        // ESP_LOGW("GAP", "ble suspend");
+        return 0;
+    }
+    
+    struct ble_hs_adv_fields fields;
+    uint8_t addr_scan[LEN_ADDR_BLE]={0};
+
+    switch (event->type){
+    // NimBLE event discovery
+    case BLE_GAP_EVENT_DISC:
+        // ESP_LOGW("GAP", "GAP EVENT DISCOVERY");
+        ble_hs_adv_parse_fields(&fields, event->disc.data, event->disc.length_data);
+
+        // procesar informacion de dispositivos escaneandos basjo estas condiciones
+        if ((fields.name_len>0) && (list_ble_info.num_info>0) && (fields.mfg_data_len==9)){
+			
+			ESP_LOGW("GAP","name_len: %u, list_num: %u, mg_len: %d",
+					fields.name_len, list_ble_info.num_info, fields.mfg_data_len);
+
+            // verificamos el nombre "sps"
+			ESP_LOGW("GAP","NAME: %.*s", fields.name_len, fields.name);
+
+			for (size_t i = 0; i < LEN_ADDR_BLE; i++) {
+				addr_scan[i] = event->disc.addr.val[LEN_ADDR_BLE - 1 - i];
+			}
+
+			// verifcamos si la mac existe en nuestra lista y obtnemos el indice
+			int idx_mac= ink_get_indx_to_list_reg(addr_scan, list_ble_info);
+			char mac_str_aux[20];
+			ink_addr_to_string(addr_scan, mac_str_aux);
+			ESP_LOGW("GAP","mac: %s, idx %d\r\n", mac_str_aux, idx_mac);
+			// Print MAC address
+
+			// validamos el indice retornado;
+			if (idx_mac>=0){
+				// obtenemos el indice para registrar la data
+				int idx_rep= ink_get_indx_to_list_report(addr_scan, list_ble_report);
+				if (idx_rep>=0){
+					// update chars
+					list_ble_report.ls_ble[idx_rep].ble_info = list_ble_info.ls_info[idx_mac];
+					// ipdate manuf data
+					memcpy(list_ble_report.ls_ble[idx_rep].ble_data.manuf_data,fields.mfg_data,fields.mfg_data_len);
+					// update time
+					time(&list_ble_report.ls_ble[idx_rep].ble_data.time);
+					// update state
+					list_ble_report.ls_ble[idx_rep].ready = 1;
+				}
+			}
+        }
+        break;
+
+    default:
+        break;
+    }
+    return 0;
+}
+
+void ble_app_scan(void){
+    ESP_LOGW("BLE","Init NimBLE scann...");
+    struct ble_gap_disc_params disc_params;
+    disc_params.filter_duplicates = 0;
+    disc_params.passive = 0;
+    disc_params.itvl = 0x2000;  	// 0x0004 -> 0xFFFF (0.625 ms)
+    disc_params.window = 0x1000; 	// 0x0004 -> 0xFFFF (0.625 ms)
+    disc_params.filter_policy = BLE_HCI_SCAN_FILT_NO_WL;
+    disc_params.limited = 1; // BLE_HS_FOREVER; // Escaneo continuo
+    ret_init_scan = ble_gap_disc(ble_addr_type, BLE_HS_FOREVER, &disc_params, ble_gap_event, NULL);
+	ESP_LOGW("BLE","ret scan: %d\r\n", ret_init_scan);
+}
+
+// The application
+void ble_app_on_sync(void){
+    int ret;
+	ret = ble_hs_id_infer_auto(0, &ble_addr_type); // Determines the best address type automatically
+    ESP_LOGI("BLE","ret ble MAC: %d",ret);
+	ble_app_scan();                          
+}
+
+// The infinite task
+void host_task(void *param){
+    nimble_port_run(); // This function will return only when nimble_port_stop() is executed
+}
+
+
+void init_ble_scann(){
+    /*------------*/
+    char str_imei[30]={0};
+    sprintf(str_imei,"gtw-%s",data_modem.info.imei);
+    // nvs_flash_init();                            // 1 - Initialize NVS flash using
+    nimble_port_init();                             // 2 - Initialize the controller stack
+    ble_svc_gap_device_name_set(str_imei);          // 3 - Set device name characteristic
+    ble_svc_gap_init();                             // 4 - Initialize GAP service
+    ble_hs_cfg.sync_cb = ble_app_on_sync;           // 5 - Set application
+    nimble_port_freertos_init(host_task);           // 6 - Set infinite task
+    active_scan_process = 1;
+    return;
 }
 
 /**
@@ -338,6 +428,7 @@ void OTA_Modem_Check(void){
             ESP_LOGI(TAG_OTA,"Waiting for response...");
             readAT("}\r\n", "-8/()/(\r\n",10000,buffer);   // 2. Se recibe la 1ra respuesta con ota True si tiene un ota pendiente... (el servidor lo envia justo despues de recibir la info)(}\r\n para saber cuando llego la respuesta)
             debug_ota("main> repta %s\r\n", buffer);
+
             if(strstr(buffer,"\"ota\": \"true\"") != 0x00){
                 ESP_LOGI(TAG_OTA,"Start OTA download");
                 ESP_LOGW(TAG_OTA,"WDT deactivate");
@@ -353,8 +444,12 @@ void OTA_Modem_Check(void){
                 watchdog_en=1;
                 ESP_LOGW(TAG_OTA,"WDT reactivate");
             }
-            int ret_tcp=TCP_close(); // close tcp
-            printf("ret : 0x%x\r\n",ret_tcp);
+
+            else{
+                int ret_tcp=TCP_close(); // close tcp
+                printf("ret : 0x%x\r\n",ret_tcp);
+            }
+
         }
     }while(false);
     return;
@@ -439,151 +534,10 @@ int CheckRecMqtt(void){
 	return ret_conn;
 }
 
-/************************************************
- * BLE CONTROLLERS (FUNCS AND TASK)
-*************************************************/
 
 
-// STATIC
-static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t* param) {
-
-    // uint8_t *adv_name = NULL;
-    // uint8_t adv_name_len = 0;
-    uint8_t *manufacturer_data;
-    uint8_t adv_manufacturer_len = 0;
-
-	esp_bd_addr_t addr_scan={0};
-
-    switch (event) {
-    case ESP_GAP_BLE_SCAN_RESULT_EVT: {
-        esp_ble_gap_cb_param_t *scan_result = (esp_ble_gap_cb_param_t *)param;
-        switch (scan_result->scan_rst.search_evt) {
-			case ESP_GAP_SEARCH_INQ_RES_EVT:{
-				// deshabilitar si se completa los dispositivos máximos
-				if (sen_ble_count >= MAX_BLE_DEVICES || list_ble_device.num_ble==0) {
-					BLE_scanner_stop();
-					scanning =false;
-					break;
-				}
-				// adv_name = esp_ble_resolve_adv_data(scan_result->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL,&adv_name_len);
-				//manufacturer_data = esp_ble_resolve_adv_data(scan_result->scan_rst.ble_adv,	ESP_BLE_AD_MANUFACTURER_SPECIFIC_TYPE,&adv_manufacturer_len);
-				esp_log_buffer_hex(TAG, scan_result->scan_rst.bda, 6);
-				memcpy(addr_scan, scan_result->scan_rst.bda, 6);
-				//ESP_LOGW(TAG, "searched MANUFACTURE Len %d", adv_manufacturer_len);
-
-				
-				int idx = -1;
-				if (ink_check_addr_scan(addr_scan,&list_ble_device,&idx)==1){
-					manufacturer_data = esp_ble_resolve_adv_data(scan_result->scan_rst.ble_adv,
-												ESP_BLE_AD_MANUFACTURER_SPECIFIC_TYPE,
-												&adv_manufacturer_len);
-					ESP_LOGW(TAG, "searched MANUFACTURE Len %d", adv_manufacturer_len);
-
-					if(adv_manufacturer_len>1){
-						strcpy(list_ble_data.data_ble[sen_ble_count].name, list_ble_device.addr_scan[idx].name);// copiando el nombre
-						memcpy(list_ble_data.data_ble[sen_ble_count].addr, list_ble_device.addr_scan[idx].addr, 6);
-						memcpy(list_ble_data.data_ble[sen_ble_count].data_Hx, manufacturer_data, adv_manufacturer_len);
-                        list_ble_data.data_ble[sen_ble_count].cfg_tem = list_ble_device.addr_scan[idx].cfg_tem;
-
-						time(&unix_time);
-						list_ble_data.data_ble[sen_ble_count].epoch_ts = unix_time;
-						sen_ble_count++;
-						list_ble_data.num_ble =sen_ble_count;
-                        
-					}else{
-						list_ble_device.addr_scan[idx].scan_ok = false;
-					}
-				}
-				break;
-				}
-			case ESP_GAP_SEARCH_INQ_CMPL_EVT:{
-				ESP_LOGI("BLE", "End scan...\n");
-				scanning = false;
-				break;
-				}
-			default:
-				break;
-        }
-        break;
-        }
-    case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT: {
-        scanning = false;
-        if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS) {
-            ESP_LOGE(TAG, "Scan stop failed, error status = %x", param->scan_stop_cmpl.status);
-        }
-        break;
-        }
-    default:
-        break;
-    }
-}
 
 
-void BLE_init(void){
-	ESP_LOGI(TAG,"-------BLE INIT----");
-    esp_err_t err;
-	ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
-	esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-	err = esp_bt_controller_init(&bt_cfg);
-    if (err) {
-        ESP_LOGE(TAG, "%s initialize controller failed: %s", __func__, esp_err_to_name(err));
-    }
-	
-    err = esp_bt_controller_enable(ESP_BT_MODE_BLE);
-    if (err) {
-        ESP_LOGE(TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(err));
-    }
-
-    // Initialize Bluedroid with configuration
-    esp_bluedroid_config_t bluedroid_cfg = {
-        .ssp_en = true  // Habilita el emparejamiento seguro simple (SSP)
-    };
-
-    err = esp_bluedroid_init_with_cfg(&bluedroid_cfg);
-    if (err) {
-        ESP_LOGE(TAG, "%s init bluetooth failed: %s", __func__, esp_err_to_name(err));
-    }
-
-    err = esp_bluedroid_enable();
-    if (err) {
-        ESP_LOGE(TAG, "%s enable bluetooth failed: %s", __func__, esp_err_to_name(err));
-    }
-
-    //register the  callback function to the gap module
-	err = esp_ble_gap_register_callback(esp_gap_cb);
-    if (err){
-        ESP_LOGE(TAG, "%s gap register failed, error code = %x", __func__, err);    
-	}
-	
-
-    err = esp_ble_gattc_app_register(PROFILE_A_APP_ID);
-    if (err){
-        ESP_LOGE(TAG, "%s gattc app register failed, error code = %x", __func__, err);
-    }
-
-	err = esp_ble_gatt_set_local_mtu(500);
-    if (err){
-        ESP_LOGE(TAG, "set local  MTU failed, error code = %x",err);
-    }
-	return;
-}
-
-void BLE_scanner_start(void) {
-    if (!scanning) {
-        esp_ble_gap_set_scan_params(&ble_scan_params); 
-        esp_ble_gap_start_scanning(SCAN_DURATION);
-        scanning = true;
-        printf("Started BLE scanning...\n\r");
-    }
-}
-
-void BLE_scanner_stop(void) {
-    if (scanning) {
-        esp_ble_gap_stop_scanning();
-        scanning = false;
-        ESP_LOGI(TAG, "Stopped BLE scanning");
-    }
-}
 
 /*--- BLE OTA INIT---*/
 /*
@@ -609,15 +563,13 @@ bool run_diagnostics() {
 ***********************************************/
 void Info_Send(void){
     ESP_LOGI("MQTT-INFO","<-- Send device info -->");
-
-
 	static char topic[60]="";
 	sprintf(topic,"%s/%s/INFO",MASTER_TOPIC_MQTT,data_modem.info.imei);
 
 	time(&data_modem.time);
 	data_modem.signal = Modem_get_signal();
 	
-	js_modem_to_str(data_modem, list_ble_device.num_ble, buff_aux);
+	js_modem_to_str(data_modem, buff_aux);
 	int ret_check =  CheckRecMqtt();
     ESP_LOGI("MQTT-INFO","ret-conn: 0x%X",ret_check);
 	if(ret_check ==MD_MQTT_CONN_OK){
@@ -629,6 +581,8 @@ void Info_Send(void){
     return;
 }
 
+
+
 void BLE_send(void){
 	int status = 0;
 	int data_len=0;
@@ -639,27 +593,22 @@ void BLE_send(void){
 	status = CheckRecMqtt();
 	if(status ==MD_MQTT_CONN_OK){
 		//M95_PubMqtt_data(aux_buff,topico,strlen(aux_buff),tcpconnectID);
-        int alert_ble = ALERT_BLE_DEACTIVE;
-		for (size_t i = 0; i < list_ble_data.num_ble; i++){
-			ink_esp_bd_addr__to__string_1(list_ble_data.data_ble[i].addr,mac_aux);
+
+		for (size_t i = 0; i < MAX_BLE_DEVICES; i++){
+            if (list_ble_report.ls_ble[i].ready==0){
+                break;
+            }
+
+            ink_addr_to_string(list_ble_report.ls_ble[i].ble_info.addr, mac_aux);
 			sprintf(topico,"%s/%s/%s",MASTER_TOPIC_MQTT,data_modem.info.imei,mac_aux);
-			js_record_data_ble(list_ble_data.data_ble[i], buff_aux);
+
+			js_record_data_ble(list_ble_report.ls_ble[i], buff_aux);
 			data_len = strlen(buff_aux);
 			Modem_Mqtt_Pub(buff_aux,topico,data_len,mqtt_idx, 0);
-			vTaskDelay(pdMS_TO_TICKS(1000));
-            if (alert_ble == ALERT_BLE_DEACTIVE){
-                alert_ble = ink_check_limit_temp(list_ble_data.data_ble[i]);
-            }
+			WAIT_S(1);
 		}
-        if ( alert_ble != ALERT_BLE_DEACTIVE){
-            // enviar alerta
-            ESP_LOGE("BLE-SEND","SEND ALERT TO TASK CIRCULINA");
-            xQueueSend(AlertQueue, &alert_ble, portMAX_DELAY); 
-        }
         
 	}
-	list_ble_data.data_ready=false;
-	list_ble_data.num_ble = 0;
 	printf("BLE: Data de sensor enviada \r\n");
 }
 
@@ -720,32 +669,38 @@ void SMS_check(void){
                 ret_sms=extraer_mac_y_nombre(message,mac_str,nombre);
                 ESP_LOGI(TAG, "SMS extrac mac name: %d",ret_sms);
                 if (ret_sms==1)	{
-                    esp_bd_addr_t addr_aux;
-                    // se convierte el mac en ADDR
-                    ret_sms= ink_string__to__esp_bd_addr(mac_str,&addr_aux);
+                    active_scan_process = 0; // DEACTIVE SCAN PROCCES
+                    WAIT_S(1);
+
+                    uint8_t addr_aux[LEN_ADDR_BLE];
+                    ret_sms=ink_string_to_addr(mac_str,addr_aux);
                     ESP_LOGI(TAG, "SMS mac err: %d",ret_sms);
-                    if (ret_sms==1){
-                        ret_sms=ink_check_exist_ble(addr_aux,list_ble_device);
-                        int num_ble_reg = list_ble_device.num_ble;
-                        if ( ret_sms!=1 && num_ble_reg<MAX_BLE_DEVICES){
-                            memcpy(list_ble_device.addr_scan[num_ble_reg].addr,addr_aux, 6);
-                            strcpy(list_ble_device.addr_scan[num_ble_reg].name,nombre);
-                            list_ble_device.num_ble = num_ble_reg +1;
+                    if (ret_sms==0){
+                        int idx_info = ink_get_indx_to_list_reg(addr_aux, list_ble_info);
+                        if ( idx_info==-1 && list_ble_info.num_info<MAX_BLE_DEVICES){
+                            memcpy(list_ble_info.ls_info[list_ble_info.num_info].addr,addr_aux, LEN_ADDR_BLE);
+                            strcpy(list_ble_info.ls_info[list_ble_info.num_info].name,nombre);
+                            list_ble_info.num_info +=1;
+                            ESP_LOGI(TAG_SMS,"BLE ADD OK");
                         }else{
                             ESP_LOGW(TAG_SMS,"BLE ADD FAIL- DEVICE EXIST");
                         }
                     }else{
                         ESP_LOGE(TAG_SMS,"BLE ADD FAIL");
                     }
+
+                    active_scan_process = 1; // ACTIVE SCAN PROCCES
                 }else{
                     ESP_LOGE(TAG_SMS,"MAC IS INCORRECT");
-                }   
+                }
+                
 			}else if(strstr(message,"BLE,C,")!=NULL){
                 char mac_str[18];   // MAC (formato XX:XX:XX:XX:XX)
                 float tmax;
                 float tmin;
                 ret_sms=extraer_mac_tmax_tmin(message,mac_str,&tmax,&tmin);
                 ESP_LOGI(TAG, "SMS extrac mac name: %d",ret_sms);
+                /*
                 if (ret_sms==1)	{
                     esp_bd_addr_t addr_aux;
                     // se convierte el mac en ADDR
@@ -768,10 +723,15 @@ void SMS_check(void){
                     }
                 }else{
                     ESP_LOGE(TAG_SMS,"MAC IS INCORRECT");
-                }  
+                }
+                */
 			}else if(strstr(message,"BLE,E")!=NULL){
-				ink_init_list_ble_addr(&list_ble_device);
+                active_scan_process = 1; // activar
+                WAIT_S(1);
+				ink_clean_list_ble_info(&list_ble_info);
+				ink_clean_list_ble_rep(&list_ble_report);
 				ESP_LOGW(TAG_SMS,"lista BLE eliminada");
+                active_scan_process = 1; // activar
 
 			}
 		}else if(strstr(message,"INFO")!=NULL){
@@ -779,7 +739,8 @@ void SMS_check(void){
 			ESP_LOGI(TAG_SMS,"Informacion solicitada");
 		}else if(strstr(message,"RESET")!=NULL){
 			ESP_LOGE(TAG_SMS,"Reset solicitado");
-			Modem_turn_OFF_command();
+			Modem_turn_OFF();
+            WAIT_S(1);
 			esp_restart();
 		}else if(strstr(message,"MQTT,")!=NULL){
 			enviar_sms=1;
@@ -800,18 +761,20 @@ void SMS_check(void){
 		nvs_erase_key(storage_nvs_handle,KEY_BLE_LIST);
 		nvs_erase_key(storage_nvs_handle,KEY_IP_MQTT);
 
-		nvs_set_u16(storage_nvs_handle,KEY_BLE_TIME,delay_ble);
-		nvs_set_blob(storage_nvs_handle, KEY_BLE_LIST, &list_ble_device, sizeof(ink_list_ble_addr_t));
-		nvs_set_str(storage_nvs_handle,KEY_IP_MQTT,ip_mqtt_connect);
+		nvs_set_u16(storage_nvs_handle, KEY_BLE_TIME,delay_ble);
+		nvs_set_blob(storage_nvs_handle, KEY_BLE_LIST, &list_ble_info, sizeof(ink_list_ble_info_t));
+		nvs_set_str(storage_nvs_handle, KEY_IP_MQTT,ip_mqtt_connect);
 
 		nvs_commit(storage_nvs_handle); // guardar cambios de maenra permanente
-		/*===================================================*/	
+		/*===================================================*/
+        ret_sms =Modem_SMS_delete();
+        ESP_LOGI(TAG_SMS, "delete sms :0x%X",ret_sms);
 	}
 
 	if (enviar_sms){
 		enviar_sms=0;
 		memset(message, '\0',strlen(message));
-		ink_concat_lit_ble(list_ble_device,buff_aux);
+		ink_concat_list_ble(list_ble_info,buff_aux);
 
 		sprintf(message,"IMEI: %s\n"
 						"ip_mqtt: %s\n"
@@ -827,55 +790,37 @@ void SMS_check(void){
 		ESP_LOGI(TAG_SMS, "send sms status :0x%X",ret_sms);
 		printf("phone:%s\r\n",phone);
 		printf("send:\r\n%s\r\n",message);
-	}
 
-    ret_sms =Modem_SMS_delete();
-    ESP_LOGI(TAG_SMS, "delete sms :0x%X",ret_sms);
+        ret_sms =Modem_SMS_delete();
+        ESP_LOGI(TAG_SMS, "delete sms :0x%X",ret_sms);
+	}
     return;
 }
 
-/**********************************************
- * BLE SCAN TASK
-**********************************************/
 
-static void BLE_scann_task(void *pvParameters){
-	ESP_LOGI("BLE","---scan task---.");
-	time_t time_modem;
-    time(&time_modem);
-    time_t time_scan  = time_modem-(delay_ble*45);
-	WAIT_S(2);
-
+/*----------------------------------------------------
+ * WTD TASK
+*----------------------------------------------------*/
+static void M95_Watchdog(void* pvParameters){
+	uint32_t watchdog_time;
 	for(;;){
-		time(&time_modem);
-		if (difftime(time_modem,time_scan)>(delay_ble*60)){
-			time_scan=time_modem;
-			if (list_ble_device.num_ble>0){
-				// inicializar parametros
-				sen_ble_count=0;
-				for (size_t i = 0; i < list_ble_device.num_ble; i++) {
-					list_ble_device.addr_scan[i].scan_ok = false;
-				}
-
-				ink_print_list_ble_addr(list_ble_device);
-				BLE_scanner_start();
-				vTaskDelay(pdMS_TO_TICKS(1000));
-				do{
-					vTaskDelay(pdMS_TO_TICKS(1000));
-				}while (scanning);
-
-				if (list_ble_data.num_ble>0){
-					list_ble_data.data_ready = true;
-				}
-				ESP_LOGI(TAG, "NUM LIST DATA : %d",list_ble_data.num_ble);
-			}else{
-				ESP_LOGI("BLE","MAC NOT REGISTERS");
-			}
+		watchdog_time=((pdTICKS_TO_MS(xTaskGetTickCount())/1000)-current_time);
+		if (watchdog_time >=180 && watchdog_en){
+			ESP_LOGE("WTD"," moden no respondio por 3 minutos, reiniciando...\r\n");
+			vTaskDelete(MAIN_task_handle);
+            Modem_turn_OFF();
+            WAIT_S(2);
+			esp_restart();
 		}
 
-		vTaskDelay(pdMS_TO_TICKS(1000));
+		if (watchdog_en){
+			printf("WTD. time pass: %lu sec\r\n",watchdog_time);
+		}
+		vTaskDelay(5000/portTICK_PERIOD_MS);
 	}
 	vTaskDelete(NULL);
 }
+
 /**********************************************
  * CIRCULINA TASK
 **********************************************/
@@ -915,7 +860,7 @@ static void Main_Task(void* pvParameters){
         // SEND INFO DATA
 		if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= Info_time){
 			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-			Info_time+= delay_info*60;// cada 1 min
+			Info_time+= 5*60;// cada 5 min
 			if(ret_update_time!=MD_CFG_SUCCESS){
 			    ret_update_time=Modem_update_time(1);
 			}
@@ -923,11 +868,19 @@ static void Main_Task(void* pvParameters){
             WAIT_S(1);
 		}
 
-        if (list_ble_data.data_ready){
+		if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= BLE_time){
 			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-			BLE_send();
-			printf("MQTT BLE tomo %lu segundos\r\n",(pdTICKS_TO_MS(xTaskGetTickCount())/1000-current_time));
-			vTaskDelay(100);
+			BLE_time += delay_ble*60;
+			printf("----send ble time---\r\n");
+
+			active_scan_process=0; // no proceso
+			WAIT_S(1);
+			if (list_ble_info.num_info>0){
+				BLE_send();
+			}
+			active_scan_process = 1;
+			printf("BLE SEND in %u mins\r\n",delay_ble);
+			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 		}
 
         // SEND CHECK READ DATA
@@ -939,7 +892,7 @@ static void Main_Task(void* pvParameters){
 		}
         if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= SMS_time){
 			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-			SMS_time += 10;
+			SMS_time += 5;
 			SMS_check();
 			// printf("Siguiente ciclo en 10 segundos\r\n");
 			// printf("SMS CHECK tomo %lu segundos\r\n",(pdTICKS_TO_MS(xTaskGetTickCount())/1000-current_time));
@@ -1008,15 +961,10 @@ void app_main(void){
 
     /*--- Initialize NVS ---*/
     Init_NVS_Keys();
-    BLE_init();
-    // init ble ota--
-    // init_ble_ota();
 
     // Init Modem params
     main_cfg_parms();
     Modem_config();
-
-    // INIT OTA BLE 
     xTaskCreate(Modem_rx_task, "M95_rx_task", 1024*4, NULL, configMAX_PRIORITIES -1,&UART_task_handle);    // active service
 
     ret_main = Active_modem();
@@ -1073,7 +1021,14 @@ void app_main(void){
     
     AlertQueue = xQueueCreate(5, sizeof(int));
     xTaskCreate(Main_Task,"Main_Task",1024*10,NULL,10, & MAIN_task_handle);
-    xTaskCreate(BLE_scann_task,"BLE_task",1024*8,NULL,13, &BLE_Task_handle);
     xTaskCreate(AlarmTask,"AlarmTask",1024*2,NULL, 5, &ALARM_Task_handle);
+    xTaskCreate(M95_Watchdog,"M95_Watchdog",2048, NULL,11,NULL);
+
+    init_ble_scann();
+    WAIT_S(2);
+    if (ret_init_scan!=0){
+		vTaskDelete(MAIN_task_handle);
+		esp_restart();
+	}
 }
 

@@ -222,7 +222,7 @@ int Modem_turn_ON(){
 
 int Modem_check_AT(){
 	int ret = 0;
-	ESP_LOGI(TAG, "CHECK COMMAND AT");
+	// ESP_LOGI(TAG, "CHECK COMMAND AT");
 	uart_flush(modem_uart.uart_num);
 
 	WAIT_MS(500);
@@ -914,10 +914,11 @@ int Modem_SMS_Read(char* mensaje, char *numero){
 		return MD_SMS_READ_NO_FOUND;
 	}
 	// continuar para procesar
-	printf("RECIV SMS: %s\n",buff_reciv);
+	// printf("RECIV SMS: %s\n",buff_reciv);
 	data_sms_strt_t sms_data;
 	ret = str_to_data_sms(buff_reciv,&sms_data);
 
+	/*
 	// leer lo de la memoria 0,
 	sendAT("AT+CMGR=0\r\n","OK\r\n","ERROR",1000,buff_reciv);
 	WAIT_MS(100);
@@ -925,23 +926,23 @@ int Modem_SMS_Read(char* mensaje, char *numero){
 	// leer lo de la memoria 1
 	sendAT("AT+CMGR=1\r\n","OK\r\n","ERROR",1000,buff_reciv);
 	WAIT_MS(100);
+	*/
 	
 	if (sms_data.lines >= 2){
 		//line 0
 		if (find_phone_and_extract(sms_data.data[0], numero) == 0) {
-            #if DEBUG_MODEM
-
+            // #if DEBUG_MODEM
             	ESP_LOGW(TAG, "phone: %s", numero);
-            #endif
+            // #endif
         }else{
 			free_data(&sms_data);
 		 	return MD_SMS_READ_UNKOWN;
 		}
 		// line 1
         strcpy(mensaje, sms_data.data[1]);
-        #if DEBUG_MODEM
+        // #if DEBUG_MODEM
         	ESP_LOGW(TAG, "msg: %s", mensaje);
-        #endif
+        // #endif
         free_data(&sms_data);
         return MD_SMS_READ_FOUND;
 	 }else{

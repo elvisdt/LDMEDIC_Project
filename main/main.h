@@ -21,6 +21,7 @@ typedef struct modem_gsm{
     char         code[10];
 	int          signal;
 	time_t       time;
+    uint8_t      num_ble;
 }modem_gsm_t;
 
 
@@ -78,11 +79,4 @@ int extraer_mac_tmax_tmin(char *cadena, char *mac, float* tmax, float* tmin);
 /************************************************
  * JASON PARSER
 *************************************************/
-
-int js_modem_to_str(const modem_gsm_t modem,int num_ble, char* buffer);
-
-int js_str_to_ble(const char *json_string, cfg_ble_t *ble_config);
-
-int js_record_data_ble(ink_sens_ble_t data_ble, char *buffer);
-
 #endif /*_MAIN_H_*/

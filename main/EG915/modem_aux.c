@@ -104,7 +104,7 @@ int find_phone_and_extract(char* input_string, char* phone) {
         if(strstr(token,"\"+")){
             strcpy(phone,token);
             remove_char(phone, '\"');
-            printf("found token: %s\r\n",phone);
+            // printf("found token: %s\r\n",phone);
             return 0;//OK
         }
         token = strtok(NULL, ","); // Siguiente token
