@@ -71,16 +71,14 @@
 
 /*----> >-----*/
 #define     PIN_CIRCULINA      GPIO_NUM_11
+#define	    INIT_DELAY_BLE		3
 
-#define	INIT_DELAY_BLE		3
-
-#define WAIT_MS(x)		vTaskDelay(pdMS_TO_TICKS(x))
-#define WAIT_S(x)		vTaskDelay(pdMS_TO_TICKS(x*1e3))
+#define     WAIT_MS(x)		vTaskDelay(pdMS_TO_TICKS(x))
+#define     WAIT_S(x)		vTaskDelay(pdMS_TO_TICKS(x*1e3))
 
 /***********************************************
  * STRUCTURES
 ************************************************/
-
 
 /***********************************************
  * VARIABLES
@@ -106,6 +104,7 @@ TaskHandle_t ALARM_Task_handle      =   NULL;
 cJSON *doc;
 char * output;
 
+
 /*--> NVS <---*/
 nvs_handle_t storage_nvs_handle;
 uint16_t delay_ble=INIT_DELAY_BLE;
@@ -114,6 +113,8 @@ uint8_t     delay_tmin = 20;
 
 size_t BLE_size  = sizeof(ink_list_ble_info_t);
 size_t MQTT_size = 50;
+
+
 
 /*---> Aux Mememory <---*/
 uint8_t aux_buff_mem[BUF_SIZE_MODEM];
@@ -124,11 +125,9 @@ char* buff_aux=(char*)aux_buff_mem;
 static modem_gsm_t data_modem={0};
 static int ret_update_time =0;
 
-
 /*---> gpio and uart config <---*/
 EG915_gpio_t modem_gpio;
 EG915_uart_t modem_uart;
-
 
 /*---> OTA <--*/
 uint8_t watchdog_en=1;
@@ -312,31 +311,25 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg){
     switch (event->type){
     // NimBLE event discovery
     case BLE_GAP_EVENT_DISC:
+        
         // ESP_LOGW("GAP", "GAP EVENT DISCOVERY");
         ble_hs_adv_parse_fields(&fields, event->disc.data, event->disc.length_data);
-
         // procesar informacion de dispositivos escaneandos basjo estas condiciones
-        if ((fields.name_len>0) && (list_ble_info.num_info>0) && (fields.mfg_data_len==9)){
-			
-			ESP_LOGW("GAP","name_len: %u, list_num: %u, mg_len: %d",
-					fields.name_len, list_ble_info.num_info, fields.mfg_data_len);
-
-            // verificamos el nombre "sps"
-			ESP_LOGW("GAP","NAME: %.*s", fields.name_len, fields.name);
-
+        if ((fields.name_len>0) && (list_ble_info.num_info>0) && (fields.mfg_data_len==9)){  
+            WAIT_MS(200);          
 			for (size_t i = 0; i < LEN_ADDR_BLE; i++) {
 				addr_scan[i] = event->disc.addr.val[LEN_ADDR_BLE - 1 - i];
 			}
-
 			// verifcamos si la mac existe en nuestra lista y obtnemos el indice
 			int idx_mac= ink_get_indx_to_list_reg(addr_scan, list_ble_info);
 			char mac_str_aux[20];
 			ink_addr_to_string(addr_scan, mac_str_aux);
-			ESP_LOGW("GAP","mac: %s, idx %d\r\n", mac_str_aux, idx_mac);
-			// Print MAC address
-
+			
 			// validamos el indice retornado;
 			if (idx_mac>=0){
+                ESP_LOGI("GAP","name: %.*s", fields.name_len, fields.name);
+                ESP_LOGI("GAP","addr: %s, idx %d\r\n", mac_str_aux, idx_mac);
+                WAIT_MS(500);
 				// obtenemos el indice para registrar la data
 				int idx_rep= ink_get_indx_to_list_report(addr_scan, list_ble_report);
 				if (idx_rep>=0){
@@ -349,7 +342,10 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg){
 					// update state
 					list_ble_report.ls_ble[idx_rep].ready = 1;
 				}
-			}
+			}else{
+                ESP_LOGW("GAP","name: %.*s", fields.name_len, fields.name);
+                ESP_LOGW("GAP","addr: %s \r\n", mac_str_aux);
+            }
         }
         break;
 
@@ -364,10 +360,10 @@ void ble_app_scan(void){
     struct ble_gap_disc_params disc_params;
     disc_params.filter_duplicates = 0;
     disc_params.passive = 0;
-    disc_params.itvl = 0x2000;  	// 0x0004 -> 0xFFFF (0.625 ms)
-    disc_params.window = 0x1000; 	// 0x0004 -> 0xFFFF (0.625 ms)
+    disc_params.itvl    = 0xF000;  	// 0x0004 -> 0xFFFF (0.625 ms)
+    disc_params.window  = 0x0400; 	// 0x0004 -> 0xFFFF (0.625 ms)
     disc_params.filter_policy = BLE_HCI_SCAN_FILT_NO_WL;
-    disc_params.limited = 1; // BLE_HS_FOREVER; // Escaneo continuo
+    disc_params.limited = 0; // BLE_HS_FOREVER; // Escaneo continuo
     ret_init_scan = ble_gap_disc(ble_addr_type, BLE_HS_FOREVER, &disc_params, ble_gap_event, NULL);
 	ESP_LOGW("BLE","ret scan: %d\r\n", ret_init_scan);
 }
@@ -569,6 +565,8 @@ void Info_Send(void){
 	time(&data_modem.time);
 	data_modem.signal = Modem_get_signal();
 	
+    data_modem.num_ble = list_ble_info.num_info;
+
 	js_modem_to_str(data_modem, buff_aux);
 	int ret_check =  CheckRecMqtt();
     ESP_LOGI("MQTT-INFO","ret-conn: 0x%X",ret_check);
@@ -1004,7 +1002,7 @@ void app_main(void){
 	sprintf(buff_aux,"IMEI: %s\n"
 					"ip_mqtt: %s\n"
 					"project: %s\n"
-					"code_ver: %s\n",
+					"code_ver: %s",
 					data_modem.info.imei,
 					ip_mqtt_connect,
 					PROJECT_NAME,
