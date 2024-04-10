@@ -1011,14 +1011,16 @@ int TCP_open(char *ip_tcp, char *port_tcp){
 
 	sendAT("AT+QIACT?\r\n","OK","ERROR",10000,buff_reciv);
 
-    char res_esperada[]= "+QIOPEN:";
-    sprintf(buff_send,"AT+QIOPEN=1,0,\"TCP\",\"%s\",%s,0,0\r\n",ip_tcp, port_tcp);
+    char res_esperada[]= "CONNECT";
+    sprintf(buff_send,"AT+QIOPEN=1,0,\"TCP\",\"%s\",%s,0,2\r\n",ip_tcp, port_tcp);
     int ret = sendAT(buff_send,res_esperada,"ERROR",150000,buff_reciv);
 
     if(ret != MD_AT_OK){
 		return MD_TCP_OPEN_FAIL;
 	}
 
+	return MD_TCP_OPEN_OK;
+	/*
 	char *result = strstr(buff_reciv, res_esperada);
 	if (result != NULL){
 		remove_spaces(result);
@@ -1031,29 +1033,43 @@ int TCP_open(char *ip_tcp, char *port_tcp){
 			}	
 		}
 	}
+	
 	return MD_TCP_OPEN_FAIL;
+	*/
 }
 
 
 int TCP_send(char *msg, uint8_t len){
     //sendAT(m95,"ATE1\r\n","OK\r\n","ERROR\r\n",5000,  m95->buff_reciv);//DES Activa modo ECO.
     int ret = 0;
+	/*
+
 	memset(buff_send,'\0',strlen(buff_send));
 	//sprintf(buff_send,"AT+QISEND=0\r\n",len);
     ret = sendAT("AT+QISEND=0\r\n",">","ERROR\r\n",25500,buff_reciv);
     if(ret != MD_AT_OK){
         return MD_TCP_SEND_FAIL;
     }
+	*/
 
     // uart_write_bytes(modem_uart.uart_num,(void *)msg,len);
 	uart_write_bytes(modem_uart.uart_num,(void *)msg,len);
+	ret = uart_wait_tx_done(modem_uart.uart_num, pdMS_TO_TICKS(120000));
+	if (ret != ESP_OK){
+		return MD_TCP_OPEN_FAIL;
+	}
+
+	/*
     ret = sendAT("\x1A","SEND OK\r\n","ERROR\r\n",25500,buff_reciv);
 
     if(ret != MD_AT_OK){
         return MD_TCP_SEND_FAIL;
     }
 	ESP_LOGI("TCP","SEND OK CORRECTO\r\n");
-    memset(buff_reciv, '\0',strlen(buff_reciv));
+	*/
+
+    // memset(buff_reciv, '\0',strlen(buff_reciv));
+	// readAT(" ")
 	return MD_TCP_SEND_OK;
 }
 

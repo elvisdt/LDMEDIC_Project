@@ -360,8 +360,8 @@ void ble_app_scan(void){
     struct ble_gap_disc_params disc_params;
     disc_params.filter_duplicates = 0;
     disc_params.passive = 0;
-    disc_params.itvl    = 0xF000;  	// 0x0004 -> 0xFFFF (0.625 ms)
-    disc_params.window  = 0x0400; 	// 0x0004 -> 0xFFFF (0.625 ms)
+    disc_params.itvl    = 0x4000;  	// 0x0004 -> 0xFFFF (0.625 ms)
+    disc_params.window  = 0x1000; 	// 0x0004 -> 0xFFFF (0.625 ms)
     disc_params.filter_policy = BLE_HCI_SCAN_FILT_NO_WL;
     disc_params.limited = 0; // BLE_HS_FOREVER; // Escaneo continuo
     ret_init_scan = ble_gap_disc(ble_addr_type, BLE_HS_FOREVER, &disc_params, ble_gap_event, NULL);
@@ -420,9 +420,9 @@ void OTA_Modem_Check(void){
             break;
         }
         ESP_LOGI(TAG_OTA,"Requesting update...");
-        if(TCP_send(output, strlen(output))==MD_TCP_SEND_OK){                           // 1. Se envia la info del dispositivo
+        if(TCP_send(output, strlen(output))==MD_TCP_SEND_OK){               // 1. Se envia la info del dispositivo
             ESP_LOGI(TAG_OTA,"Waiting for response...");
-            readAT("}\r\n", "-8/()/(\r\n",10000,buffer);   // 2. Se recibe la 1ra respuesta con ota True si tiene un ota pendiente... (el servidor lo envia justo despues de recibir la info)(}\r\n para saber cuando llego la respuesta)
+            readAT("}\r\n", "-8/()/(\r\n",10000,buffer);                    // 2. Se recibe la 1ra respuesta con ota True si tiene un ota pendiente... (el servidor lo envia justo despues de recibir la info)(}\r\n para saber cuando llego la respuesta)
             debug_ota("main> repta %s\r\n", buffer);
 
             if(strstr(buffer,"\"ota\": \"true\"") != 0x00){
@@ -535,18 +535,6 @@ int CheckRecMqtt(void){
 
 
 
-/*--- BLE OTA INIT---*/
-/*
-void init_ble_ota() {
-    ESP_LOGI(TAG, " BLE OTA INIT \r\n");
-    nimble_port_init();
-    ble_hs_cfg.sync_cb = sync_cb;
-    ble_hs_cfg.reset_cb = reset_cb;
-    gatt_svr_init();
-    ble_svc_gap_device_name_set(device_name);
-    nimble_port_freertos_init(host_task);
-}
-*/
 
 bool run_diagnostics() {
     // Verificar si se realizó una actualización OTA correctamente
@@ -807,7 +795,6 @@ static void M95_Watchdog(void* pvParameters){
 			ESP_LOGE("WTD"," moden no respondio por 3 minutos, reiniciando...\r\n");
 			vTaskDelete(MAIN_task_handle);
             Modem_turn_OFF();
-            WAIT_S(2);
 			esp_restart();
 		}
 
@@ -854,7 +841,8 @@ static void Main_Task(void* pvParameters){
 		if (current_time%30==0){
 			printf("Tiempo: %lu\r\n",current_time);
 		}
-
+        
+        
         // SEND INFO DATA
 		if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= Info_time){
 			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
@@ -880,11 +868,12 @@ static void Main_Task(void* pvParameters){
 			printf("BLE SEND in %u mins\r\n",delay_ble);
 			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 		}
+        
 
         // SEND CHECK READ DATA
         if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= MQTT_read_time){
 			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-			MQTT_read_time+= 10;// cada 20 seg
+			MQTT_read_time+= 10;        // cada 20 seg
             // MQTT_Read();
             WAIT_S(1);
 		}
@@ -892,14 +881,14 @@ static void Main_Task(void* pvParameters){
 			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 			SMS_time += 5;
 			SMS_check();
-			// printf("Siguiente ciclo en 10 segundos\r\n");
-			// printf("SMS CHECK tomo %lu segundos\r\n",(pdTICKS_TO_MS(xTaskGetTickCount())/1000-current_time));
+			printf("Siguiente ciclo en 10 segundos\r\n");
+			printf("SMS CHECK tomo %lu segundos\r\n",(pdTICKS_TO_MS(xTaskGetTickCount())/1000-current_time));
 			vTaskDelay(100);
         }
         
         if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= OTA_md_time){
 			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-			OTA_md_time += 60;
+			OTA_md_time += 30;
 			OTA_Modem_Check();
 			printf("Siguiente ciclo en 60 segundos\r\n");
 			printf("OTA CHECK tomo %lu segundos\r\n",(pdTICKS_TO_MS(xTaskGetTickCount())/1000-current_time));
@@ -1021,12 +1010,13 @@ void app_main(void){
     xTaskCreate(Main_Task,"Main_Task",1024*10,NULL,10, & MAIN_task_handle);
     xTaskCreate(AlarmTask,"AlarmTask",1024*2,NULL, 5, &ALARM_Task_handle);
     xTaskCreate(M95_Watchdog,"M95_Watchdog",2048, NULL,11,NULL);
-
+    
     init_ble_scann();
     WAIT_S(2);
     if (ret_init_scan!=0){
 		vTaskDelete(MAIN_task_handle);
 		esp_restart();
 	}
+    
 }
 

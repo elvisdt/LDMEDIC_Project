@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/CMakeFiles/bootloader"
+		},
+		{
+			"file" : "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/CMakeFiles/bootloader.rule"
+		},
+		{
+			"file" : "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/CMakeFiles/bootloader-complete.rule"
+		},
+		{
+			"file" : "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule"
+		},
+		{
+			"file" : "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule"
+		},
+		{
+			"file" : "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule"
+		},
+		{
+			"file" : "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule"
+		},
+		{
+			"file" : "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule"
+		},
+		{
+			"file" : "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule"
+		},
+		{
+			"file" : "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"bootloader"
+		],
+		"name" : "bootloader"
+	}
+}
