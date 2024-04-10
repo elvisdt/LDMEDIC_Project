@@ -25,6 +25,7 @@ OTA_EX_ Ota_UartControl_Modem(void){
       }
 
       if( ret != OTA_EX_OK ){
+        
         debug_ota("ota_m95> ERROR, Sending NACK\r\n");
         Ota_UartSend_Resp_Modem( OTA_NACK);
         break;
@@ -54,12 +55,16 @@ uint16_t Ota_UartRead_Modem( uint8_t *data, uint16_t max_len){
   while(true){
     // timeout general
     if( (esp_timer_get_time()-timeout)/1000 > 25000){
-      debug_ota("ota_m95> ERROR, timeout index=%d\r\n", index);
+      #if DEBUG_PRINT_DATA
+        debug_ota("ota_m95> ERROR, timeout index=%d\r\n", index);
+      #endif
       return 0;
       break;
     }
     if((rx_modem_ready == 1)&(rxBytesModem != 0)){
-      debug_ota("data recibida : %d bytes",rxBytesModem);
+      #if DEBUG_PRINT_DATA
+        debug_ota("data recibida : %d bytes",rxBytesModem);
+      #endif
       len_data = rxBytesModem;
     }
 
@@ -80,7 +85,9 @@ uint16_t Ota_UartRead_Modem( uint8_t *data, uint16_t max_len){
           printf("0x%x",data[index]);
         #endif
         if(data[index] == 0xAA){
-          debug_ota("SOF");
+          #if DEBUG_PRINT_DATA
+            debug_ota("SOF");
+          #endif
           SOF = true;
         }
         if(SOF){
