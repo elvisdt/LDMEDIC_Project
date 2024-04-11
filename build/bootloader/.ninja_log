@@ -227,3 +227,5 @@
 61519	64833	7344940301977339	D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader/.bin_timestamp	d0f15f028050c651
 64833	65398	0	esp-idf/esptool_py/CMakeFiles/bootloader_check_size	f7d83202cd61a876
 64833	65398	0	D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader/esp-idf/esptool_py/CMakeFiles/bootloader_check_size	f7d83202cd61a876
+94	356	0	esp-idf/esptool_py/CMakeFiles/bootloader_check_size	f7d83202cd61a876
+94	356	0	D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader/esp-idf/esptool_py/CMakeFiles/bootloader_check_size	f7d83202cd61a876
