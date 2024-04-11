@@ -347,6 +347,9 @@ D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/nvs_flash/CMakeFiles/insta
 D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/nvs_flash/CMakeFiles/install/local.dir
 D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/nvs_flash/CMakeFiles/install/strip.dir
 D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/esp_phy/CMakeFiles/__idf_esp_phy.dir
+D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/esp_phy/CMakeFiles/phy_init_data.dir
+D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/esp_phy/CMakeFiles/phy-flash.dir
+D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/esp_phy/CMakeFiles/encrypted-phy-flash.dir
 D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/esp_phy/CMakeFiles/edit_cache.dir
 D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/esp_phy/CMakeFiles/rebuild_cache.dir
 D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/esp_phy/CMakeFiles/list_install_components.dir
