@@ -25,8 +25,8 @@
  * STRUCTURES
 *********************************************************/
 typedef struct{
-    float Tmax;
-    float Tmin;
+    int Tmax;
+    int Tmin;
     uint8_t mode;   // active or deactive;
 }ink_temp_lim_t;
 
@@ -40,6 +40,7 @@ typedef struct{
 typedef struct{
     uint8_t manuf_data[9];  // manuf data
     time_t  time;
+    int     rssi;
 }ink_ble_data_t;
 
 
@@ -177,10 +178,11 @@ void ink_concat_list_ble(ink_list_ble_info_t list_ble, char* buffer);
  * 
  * @param addr              Dirección MAC para buscar en la lista.
  * @param list_ble_addr     Estructura ink_list_ble_info_t con la lista de registros BLE.
+ * @param idx               uint8_t con el indice encontrado de la lista.
  * @return                  El índice si se encuentra la dirección MAC, -1 si no se encuentra.
  */
-int ink_get_indx_to_list_reg(uint8_t addr[LEN_ADDR_BLE], ink_list_ble_info_t list_ble_addr);
 
+int ink_get_indx_to_list_reg(uint8_t addr[LEN_ADDR_BLE], ink_list_ble_info_t list_ble_addr, uint8_t* idx);
 
 /**
  * Obtiene el índice en la lista de informes BLE.

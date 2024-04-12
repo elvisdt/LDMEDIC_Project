@@ -43,7 +43,9 @@
         "ratio": "c",
         "typeinfo": "c",
         "variant": "c",
-        "*.inc": "c"
+        "*.inc": "c",
+        "limits": "c",
+        "semaphore": "c"
     },
     "idf.portWin": "COM7"
 }

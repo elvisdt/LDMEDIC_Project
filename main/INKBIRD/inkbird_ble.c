@@ -146,11 +146,12 @@ void ink_concat_list_ble(ink_list_ble_info_t list_ble, char* buffer) {
     return;
 }
 
-int ink_get_indx_to_list_reg(uint8_t addr[LEN_ADDR_BLE], ink_list_ble_info_t list_ble_addr){
+int ink_get_indx_to_list_reg(uint8_t addr[LEN_ADDR_BLE], ink_list_ble_info_t list_ble_addr, uint8_t* idx){
     // for of list num of device
     for (size_t i = 0; i < list_ble_addr.num_info; i++) {
         if(memcmp(addr,list_ble_addr.ls_info[i].addr,LEN_ADDR_BLE) == 0){
-            return i;
+            *idx = i;
+            return 0;
         }
     }
     return -1; // NOT FOUND ADDR INDEX

@@ -72,7 +72,7 @@ int extraer_numero(const char* cadena);
  *               Se espera que este buffer tenga suficiente espacio para almacenar el nombre.
  * @return Devuelve 1 si se extrajo con éxito la dirección MAC y el nombre, de lo contrario, devuelve 0.
  */
-int extraer_mac_y_nombre(char *cadena, char *mac, char* nombre); 
+int m_get_params_ble(char *cadena, ink_ble_info_t* ble_info); 
 
 
 int extraer_mac_tmax_tmin(char *cadena, char *mac, float* tmax, float* tmin);

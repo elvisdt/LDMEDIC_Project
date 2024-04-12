@@ -25,16 +25,15 @@ int js_modem_to_str(const modem_gsm_t modem, char* buffer){
     }
     cJSON_AddStringToObject(root, "iccid",   modem.info.iccid);
     cJSON_AddStringToObject(root, "code",    modem.code);
-    cJSON_AddNumberToObject(root, "signal",  modem.signal);
+    cJSON_AddNumberToObject(root, "n-ble",  modem.num_ble);
     cJSON_AddNumberToObject(root, "time",    modem.time);
-    cJSON_AddNumberToObject(root, "ble-num",  modem.num_ble);
+    cJSON_AddNumberToObject(root, "signal",  modem.signal);
     char *json = cJSON_PrintUnformatted(root);
     sprintf(buffer,"%s\r\n",json);
     cJSON_Delete(root);
     
     free(json);
     json=NULL;
-
     return 0;
 }
 
@@ -60,13 +59,14 @@ int js_record_data_ble(ink_ble_report_t data, char *buffer){
 
     cJSON_AddNumberToObject(root, "time", data.ble_data.time);
     cJSON_AddStringToObject(root, "name", data.ble_info.name);
+    cJSON_AddNumberToObject(root, "rssi", data.ble_data.rssi);
     cJSON_AddNumberToObject(root, "tem", temp);
     cJSON_AddNumberToObject(root, "hum", hum);
     cJSON_AddNumberToObject(root, "bat", battery);
-    cJSON_AddNumberToObject(root, "alert", data.ble_info.limits.mode);
+    cJSON_AddNumberToObject(root, "cfg", data.ble_info.limits.mode);
     if (data.ble_info.limits.mode==1){
-        cJSON_AddNumberToObject(root, "Tmax", round(data.ble_info.limits.Tmax*1e2)/1e2);
-        cJSON_AddNumberToObject(root, "Tmin", round(data.ble_info.limits.Tmin)/1e2);
+        cJSON_AddNumberToObject(root, "Tmax", data.ble_info.limits.Tmax);
+        cJSON_AddNumberToObject(root, "Tmin", data.ble_info.limits.Tmin);
     }
     
     char *json = cJSON_PrintUnformatted(root);

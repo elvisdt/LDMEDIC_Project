@@ -73,15 +73,35 @@ int split_and_check_IP(char* cadena, char* ip) {
 
 
 // Función para extraer la dirección MAC y el nombre
-int extraer_mac_y_nombre(char *cadena, char *mac, char* nombre) {
-    // "BLE,ADD,<MAC>,<NAME>";
-    // Se ignora la parte inicial "BLE,A,"
-    if (sscanf(cadena, "BLE,A,%[^,],%[^,]", mac, nombre) == 2) {
-        printf("Dirección MAC: %s\n", mac);
-        printf("Nombre: %s\n", nombre);
-        return 1; // OK
-    } 
-    return 0; // FAIL
+int m_get_params_ble(char *cadena, ink_ble_info_t* ble_info){
+    // "BLE,ADD,<MAC>,<NAME>,[<TMAX>,<TMIN>]";
+    // BLE,A,49:23:04:08:24:62,N1F,-20.2,15.5
+    int ret=0;
+
+    char addr_aux[20]={0};
+    char name_aux[10]={0};
+    int t_n1,t_n2;
+
+    int n_scan = sscanf(cadena, "%*[^,],%*[^,],%[^,],%[^,],%d,%d", addr_aux, name_aux, &t_n1,&t_n2);
+
+    if (n_scan==2){
+        ret=ink_string_to_addr(addr_aux,ble_info->addr);
+        if (ret!=0) return -1;
+        strcpy(ble_info->name,name_aux);
+        ble_info->limits.mode = 0;
+        return 0; // SUCCESFULL PARSE
+
+    }else if (n_scan==4){
+        ret=ink_string_to_addr(addr_aux,ble_info->addr);
+        if (ret!=0) return -1;
+        strcpy(ble_info->name,name_aux);
+        ble_info->limits.mode = 1;
+        ble_info->limits.Tmax = (t_n1 > t_n2) ? t_n1 : t_n2;
+        ble_info->limits.Tmin =(t_n1 < t_n2) ? t_n1 : t_n2;
+        return 0; // SUCCESFULL PARSE
+    }
+    
+    return -1;
 }
 
 // Función para extraer la dirección MAC y los limites de temperatura maxima y minima 

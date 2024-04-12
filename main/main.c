@@ -321,29 +321,36 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg){
 				addr_scan[i] = event->disc.addr.val[LEN_ADDR_BLE - 1 - i];
 			}
 			// verifcamos si la mac existe en nuestra lista y obtnemos el indice
-			int idx_mac= ink_get_indx_to_list_reg(addr_scan, list_ble_info);
+            uint8_t info_idx=0;
+			int ret_idx= ink_get_indx_to_list_reg(addr_scan, list_ble_info,&info_idx);
 			char mac_str_aux[20];
 			ink_addr_to_string(addr_scan, mac_str_aux);
 			
 			// validamos el indice retornado;
-			if (idx_mac>=0){
-                ESP_LOGI("GAP","name: %.*s", fields.name_len, fields.name);
-                ESP_LOGI("GAP","addr: %s, idx %d\r\n", mac_str_aux, idx_mac);
+            ESP_LOGI("GAP", "RSSI: %d", event->disc.rssi);
+
+			if (ret_idx==0){
+                ESP_LOGI("GAP","addr: %s, idx %d\r\n", mac_str_aux, info_idx);
                 WAIT_MS(500);
 				// obtenemos el indice para registrar la data
-				int idx_rep= ink_get_indx_to_list_report(addr_scan, list_ble_report);
-				if (idx_rep>=0){
+				int rep_idx= ink_get_indx_to_list_report(addr_scan, list_ble_report);
+
+				if (rep_idx != -1){
 					// update chars
-					list_ble_report.ls_ble[idx_rep].ble_info = list_ble_info.ls_info[idx_mac];
-					// ipdate manuf data
-					memcpy(list_ble_report.ls_ble[idx_rep].ble_data.manuf_data,fields.mfg_data,fields.mfg_data_len);
-					// update time
-					time(&list_ble_report.ls_ble[idx_rep].ble_data.time);
-					// update state
-					list_ble_report.ls_ble[idx_rep].ready = 1;
+					list_ble_report.ls_ble[rep_idx].ble_info = list_ble_info.ls_info[info_idx];
+					// update manuf data
+					memcpy(list_ble_report.ls_ble[rep_idx].ble_data.manuf_data, fields.mfg_data, fields.mfg_data_len);
+					
+                    // update time
+					time(&list_ble_report.ls_ble[rep_idx].ble_data.time);
+					
+                    // set value to RSSI:
+                    list_ble_report.ls_ble[rep_idx].ble_data.rssi = event->disc.rssi;
+                    
+                    // update state
+					list_ble_report.ls_ble[rep_idx].ready = 1;
 				}
 			}else{
-                ESP_LOGW("GAP","name: %.*s", fields.name_len, fields.name);
                 ESP_LOGW("GAP","addr: %s \r\n", mac_str_aux);
             }
         }
@@ -367,6 +374,7 @@ void ble_app_scan(void){
     ret_init_scan = ble_gap_disc(ble_addr_type, BLE_HS_FOREVER, &disc_params, ble_gap_event, NULL);
 	ESP_LOGW("BLE","ret scan: %d\r\n", ret_init_scan);
 }
+
 
 // The application
 void ble_app_on_sync(void){
@@ -650,67 +658,25 @@ void SMS_check(void){
 					ESP_LOGW(TAG_SMS,"FAIL UPDATE SLEEP TIME");
 				}
 			}else if(strstr(message,"BLE,A,")!=NULL){
-                char mac_str[18];   // MAC (formato XX:XX:XX:XX:XX)
-                char nombre[10];	// nombre
-                ret_sms=extraer_mac_y_nombre(message,mac_str,nombre);
+                ink_ble_info_t aux_info_ble={0};
+                ret_sms=m_get_params_ble(message,&aux_info_ble);
                 ESP_LOGI(TAG, "SMS extrac mac name: %d",ret_sms);
-                if (ret_sms==1)	{
+                if (ret_sms==0 && list_ble_info.num_info<MAX_BLE_DEVICES)	{
                     active_scan_process = 0; // DEACTIVE SCAN PROCCES
                     WAIT_S(1);
-
-                    uint8_t addr_aux[LEN_ADDR_BLE];
-                    ret_sms=ink_string_to_addr(mac_str,addr_aux);
-                    ESP_LOGI(TAG, "SMS mac err: %d",ret_sms);
-                    if (ret_sms==0){
-                        int idx_info = ink_get_indx_to_list_reg(addr_aux, list_ble_info);
-                        if ( idx_info==-1 && list_ble_info.num_info<MAX_BLE_DEVICES){
-                            memcpy(list_ble_info.ls_info[list_ble_info.num_info].addr,addr_aux, LEN_ADDR_BLE);
-                            strcpy(list_ble_info.ls_info[list_ble_info.num_info].name,nombre);
-                            list_ble_info.num_info +=1;
-                            ESP_LOGI(TAG_SMS,"BLE ADD OK");
-                        }else{
-                            ESP_LOGW(TAG_SMS,"BLE ADD FAIL- DEVICE EXIST");
-                        }
-                    }else{
-                        ESP_LOGE(TAG_SMS,"BLE ADD FAIL");
+                    uint8_t idx_val=0;
+                    int ret_idx = ink_get_indx_to_list_reg(aux_info_ble.addr, list_ble_info,&idx_val);
+                    if ( ret_idx!=0){
+                        idx_val = list_ble_info.num_info;
+                        list_ble_info.num_info +=1;
                     }
-
+                    list_ble_info.ls_info[idx_val] = aux_info_ble;
+                    WAIT_MS(100);
                     active_scan_process = 1; // ACTIVE SCAN PROCCES
+                    ESP_LOGI(TAG_SMS,"BLE ADD OK");
                 }else{
                     ESP_LOGE(TAG_SMS,"MAC IS INCORRECT");
                 }
-                
-			}else if(strstr(message,"BLE,C,")!=NULL){
-                char mac_str[18];   // MAC (formato XX:XX:XX:XX:XX)
-                float tmax;
-                float tmin;
-                ret_sms=extraer_mac_tmax_tmin(message,mac_str,&tmax,&tmin);
-                ESP_LOGI(TAG, "SMS extrac mac name: %d",ret_sms);
-                /*
-                if (ret_sms==1)	{
-                    esp_bd_addr_t addr_aux;
-                    // se convierte el mac en ADDR
-                    ret_sms= ink_string__to__esp_bd_addr(mac_str,&addr_aux);
-                    ESP_LOGI(TAG, "SMS mac err: %d",ret_sms);
-                    if (ret_sms==1){
-
-                        int idx_list =-1;
-                        ret_sms=ink_check_indx_ble(addr_aux,list_ble_device,&idx_list);
-                        ESP_LOGI(TAG, "exist err: %d",ret_sms);
-                        if (ret_sms==1){
-                            ink_cfg_tem_t cfg_tem_aux={1,tmax,tmin};
-                            list_ble_device.addr_scan[idx_list].cfg_tem = cfg_tem_aux;
-                             ESP_LOGI(TAG_SMS,"BLE CFG SUCCESFULL");
-                        }else{
-                            ESP_LOGW(TAG_SMS,"BLE CFG FAIL- DEVICE NO EXIST");
-                        }
-                    }else{
-                        ESP_LOGE(TAG_SMS,"BLE ADD FAIL");
-                    }
-                }else{
-                    ESP_LOGE(TAG_SMS,"MAC IS INCORRECT");
-                }
-                */
 			}else if(strstr(message,"BLE,E")!=NULL){
                 active_scan_process = 1; // activar
                 WAIT_S(1);
@@ -1000,10 +966,11 @@ void app_main(void){
 	ESP_LOGI(TAG, "send sms status :0x%X",ret_main);
     WAIT_S(5);
 
-	OTA_md_time     = pdTICKS_TO_MS(xTaskGetTickCount())/1000 + 60;
-    MQTT_read_time  = pdTICKS_TO_MS(xTaskGetTickCount())/1000 + 15;
-	Info_time       = pdTICKS_TO_MS(xTaskGetTickCount())/1000 + 10;
-    SMS_time        = pdTICKS_TO_MS(xTaskGetTickCount())/1000 + 5;
+	OTA_md_time     = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+	Info_time       = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+    SMS_time        = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+    MQTT_read_time  = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+    BLE_time        = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 	current_time    = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
     
     AlertQueue = xQueueCreate(5, sizeof(int));
