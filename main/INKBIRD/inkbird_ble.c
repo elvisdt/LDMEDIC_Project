@@ -157,6 +157,17 @@ int ink_get_indx_to_list_reg(uint8_t addr[LEN_ADDR_BLE], ink_list_ble_info_t lis
     return -1; // NOT FOUND ADDR INDEX
 }
 
+int ink_get_indx_name_to_list_reg(char* name, ink_list_ble_info_t list_ble_addr, uint8_t* idx){
+    // for of list num of device
+    for (size_t i = 0; i < list_ble_addr.num_info; i++) {
+        if(strstr(list_ble_addr.ls_info[i].name,name)!=NULL){
+            *idx = i;
+            return 0;
+        }
+    }
+    return -1; // NOT FOUND ADDR INDEX
+}
+
 
 
 int ink_get_indx_to_list_report(uint8_t addr[LEN_ADDR_BLE], ink_list_ble_report_t list_ble_rep){

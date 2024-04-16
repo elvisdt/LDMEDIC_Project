@@ -106,6 +106,28 @@ int m_get_params_ble(char *cadena, ink_ble_info_t* ble_info){
 }
 
 
+// Función para extraer la dirección MAC y el nombre
+int m_get_alert_phone(char *cadena){
+    // "BLE,ADD,<MAC>,<NAME>,[<TMAX>,<TMIN>]";
+    // BLE,A,49:23:04:08:24:62,N1F,-20.2,15.5
+    int ret=0;
+    char prefix[4], number[11];
+
+    // Extraer la información después de la coma
+    sscanf(cadena, "%*[^,],%s", number);
+
+    // Extraer el prefijo y el número
+    sscanf(number, "%3s%10s", prefix, number);
+
+    // Validar que el prefijo es +51 y que el número tiene 9 dígitos
+    if (strcmp(prefix, "+51") == 0 && strlen(number) == 9) {
+        sprintf(cadena,"%s%s",prefix,number);
+        return 0;
+    }
+    return -1;
+}
+
+
 /**
  * @brief Determina si hay una alerta de temperatura activa o no.
  *

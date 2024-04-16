@@ -34,6 +34,11 @@ typedef struct {
 }data_alarm_t;
 
 
+typedef struct {
+    char phone[15];
+    uint8_t status;
+}phone_alrm_t;
+
 
 int validarIP(const char* ip);
 
@@ -75,6 +80,8 @@ int m_get_delay(const char* cadena);
  */
 int m_get_params_ble(char *cadena, ink_ble_info_t* ble_info); 
 
+// Función para extraer la dirección MAC y el nombre
+int m_get_alert_phone(char *cadena);
 
 int m_get_temp_alert(ink_ble_report_t data);
 

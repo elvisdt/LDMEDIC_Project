@@ -184,6 +184,8 @@ void ink_concat_list_ble(ink_list_ble_info_t list_ble, char* buffer);
 
 int ink_get_indx_to_list_reg(uint8_t addr[LEN_ADDR_BLE], ink_list_ble_info_t list_ble_addr, uint8_t* idx);
 
+int ink_get_indx_name_to_list_reg(char* name, ink_list_ble_info_t list_ble_addr, uint8_t* idx);
+
 /**
  * Obtiene el índice en la lista de informes BLE.
  * 

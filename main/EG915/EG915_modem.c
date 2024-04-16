@@ -902,32 +902,23 @@ int Modem_Mqtt_Sub_Topic(int idx, char* topic_name, char* response){
         ESP_LOGE("MQTT Subs","Not data: %s\r\n",topic_name);
         return MD_CFG_FAIL;
     }
-	char aux_buff[50]={0};
-	sprintf(aux_buff,"+QMTRECV: %d,",idx);
-	success = readAT(aux_buff,"ERROR",20000,buff_reciv);
-	printf("data read: %s\n\n",buff_reciv);
 
-	// +QMTRECV: <client_idx>,<msgid>,<topic>[,<payload_len>],<payload>
-	// "+QMTRECV: 0,0,\"OTA/868695060088992/CONFIG\",17,\"{\"value\":278}\""
-	// int payload_len;
-	
-	/*
-	// Utiliza sscanf para extraer el valor de payload_len
-	if (sscanf(buff_reciv, "\r\n+QMTRECV: %*d,%*d,%*[^,],%d,", &payload_len) == 1) {
-		printf("len pylad: %d\r\n",payload_len);
-		extraer_ultimos(buff_reciv, (payload_len+4), response);
-		remove_spaces(response);
-		// eliminar las comillas del el primero y ultimo valor
-    	size_t longitud = strlen(response);
-        if (longitud>2){
-			strncpy(response, response + 1, longitud - 2);
-        	response[longitud - 2] = '\0';
+	success = readAT("+QMTRECV:","ERROR",20000,buff_reciv);
+	// printf("data read: %s\n\n",buff_reciv);
+	if (success ==MD_AT_OK){
+		char *start, *end;
+		// Encontrar la primera aparición de '{'
+		start = strchr(buff_reciv, '{');
+		// Encontrar la última aparición de '}'
+		end = strrchr(buff_reciv, '}');
+		if (start != NULL && end != NULL && start < end) {
+			// Añadir un carácter nulo después del último '}'
+			*(end + 1) = '\0';
+			strcpy(response, start);
+			remove_spaces(response);
+			return MD_CFG_SUCCESS;
 		}
-        //printf("DATA EXTRACT: %s\n", response);
-		return MD_CFG_SUCCESS;
 	}
-	*/
-
     return MD_CFG_FAIL;
 }
 
@@ -1116,13 +1107,12 @@ int TCP_open(char *ip_tcp, char *port_tcp){
 
     char res_esperada[]= "CONNECT";
     sprintf(buff_send,"AT+QIOPEN=1,0,\"TCP\",\"%s\",%s,0,2\r\n",ip_tcp, port_tcp);
-    int ret = sendAT(buff_send,res_esperada,"ERROR",150000,buff_reciv);
-
+    int ret = sendAT(buff_send,res_esperada,"NO CARRIER",150000,buff_reciv);
     if(ret != MD_AT_OK){
 		return MD_TCP_OPEN_FAIL;
 	}
-
 	return MD_TCP_OPEN_OK;
+
 	/*
 	char *result = strstr(buff_reciv, res_esperada);
 	if (result != NULL){
@@ -1178,7 +1168,7 @@ int TCP_send(char *msg, uint8_t len){
 
 int TCP_close(){
     ESP_LOGI(TAG,"==>> CLOSE TCP <<==");
-	int ret = sendAT("AT+QICLOSE=0\r\n","OK\r\n","ERROR\r\n",20000,buff_reciv);
+	int ret = sendAT("AT+QICLOSE=0,10\r\n","OK\r\n","ERROR\r\n",12000,buff_reciv);
 	WAIT_MS(100);
 
 	if(ret != MD_AT_OK){
@@ -1224,7 +1214,6 @@ uint8_t OTA(uint8_t *buff, uint8_t *inicio, uint8_t *fin, uint32_t len){
             }
         }
     }
-
     //uint8_t txData[5] = {1, 2, 3, 4, 5};
     //delay(1000);
     return 1;
