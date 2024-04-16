@@ -71,7 +71,7 @@
 
 /*----> >-----*/
 #define     PIN_CIRCULINA      GPIO_NUM_11
-#define	    INIT_DELAY_BLE		3
+#define	    INIT_INTERVAL_BLE		3
 
 #define     WAIT_MS(x)		vTaskDelay(pdMS_TO_TICKS(x))
 #define     WAIT_S(x)		vTaskDelay(pdMS_TO_TICKS(x*1e3))
@@ -84,7 +84,8 @@
  * VARIABLES
 ************************************************/
 /*---> <---*/
-QueueHandle_t AlertQueue;
+QueueHandle_t AlertCircQueue;
+QueueHandle_t AlertMqttQueue;
 
 /*---> External variables <--*/
 QueueHandle_t uart_modem_queue;
@@ -107,10 +108,7 @@ char * output;
 
 /*--> NVS <---*/
 nvs_handle_t storage_nvs_handle;
-uint16_t delay_ble=INIT_DELAY_BLE;
-uint8_t     delay_tmax = 20;
-uint8_t     delay_tmin = 20;
-
+uint8_t  delay_circ = 30;
 size_t BLE_size  = sizeof(ink_list_ble_info_t);
 size_t MQTT_size = 50;
 
@@ -142,6 +140,10 @@ int mqtt_idx = 0; 		// 0->5
 ink_list_ble_info_t   list_ble_info={0};
 ink_list_ble_report_t list_ble_report={0};
 
+uint8_t     interval_info = 5;   //min
+uint16_t    interval_ble  = INIT_INTERVAL_BLE;// min
+uint16_t    interval_circ = 1; // min
+
 uint32_t    Info_time=0;
 uint32_t    MQTT_read_time=0;
 uint32_t    OTA_md_time=1;
@@ -156,6 +158,8 @@ char ip_mqtt_connect[50] = ip_MQTT;
 uint8_t ble_addr_type;
 uint8_t active_scan_process = 0;   // Variable global para habilitar si procesar los eventos de escaneo o no
 int ret_init_scan=0;
+
+
 
 /***********************************************
  * FUNCIONTIONS
@@ -261,10 +265,10 @@ void Init_NVS_Keys(){
 		nvs_set_blob(storage_nvs_handle, KEY_BLE_LIST, &list_ble_info, sizeof(ink_list_ble_info_t));     
 	}
 
-	err=nvs_get_u16(storage_nvs_handle,KEY_BLE_TIME,&delay_ble);
+	err=nvs_get_u16(storage_nvs_handle,KEY_BLE_TIME,&interval_ble);
 	if (err == ESP_ERR_NVS_NOT_FOUND) {
-		delay_ble=INIT_DELAY_BLE;
-		nvs_set_u16(storage_nvs_handle,KEY_BLE_TIME,delay_ble);
+		interval_ble=INIT_INTERVAL_BLE;
+		nvs_set_u16(storage_nvs_handle,KEY_BLE_TIME,interval_ble);
 	}
 
 	err=nvs_get_str(storage_nvs_handle,KEY_IP_MQTT,ip_mqtt_connect,&MQTT_size);
@@ -273,21 +277,29 @@ void Init_NVS_Keys(){
 		nvs_set_str(storage_nvs_handle,KEY_IP_MQTT,ip_mqtt_connect);
 	}
 	
-	ink_concat_list_ble(list_ble_info,buff_aux);
-	printf("------------------------\r\n");
+    printf("------------------------\r\n");
 
-	printf("->MQTT:\r\n"
-		   "ip->\"%s\"\r\n"
-		   "\r\n",
-		   ip_mqtt_connect);
-	
-	printf("->BLE:\r\n"
-		  "Interval: %u min\r\n"
-		  "List:\r\n"
-		  "%s"
-		  "\r\n",
-		  delay_ble,buff_aux);
+    printf("->MQTT:\r\n"
+        "ip->\"%s\"\r\n"
+        "\r\n",
+        ip_mqtt_connect);
 
+    printf("BLE interval: %d min\r\n",interval_ble);
+    printf("BLE LIST:\r\n");
+    for (size_t i = 0; i < list_ble_info.num_info; i++){
+        printf("name: %s\r\n",list_ble_info.ls_info[i].name);
+        printf("addr: ");
+        for (size_t j = 0; j < LEN_ADDR_BLE; j++){
+            printf("%02X ",list_ble_info.ls_info[i].addr[j]);
+        }
+        printf("\r\n");
+        if (list_ble_info.ls_info[i].limits.mode==1){
+            printf("limts: Tmax:%d, Tmin:%d\r\n",list_ble_info.ls_info[i].limits.Tmax, list_ble_info.ls_info[i].limits.Tmin);
+        }else{
+             printf("limts: deactive\r\n");
+        }
+        printf("\r\n");
+    }
 	printf("------------------------\r\n");
     
 	//-------------------------------------------------//
@@ -298,8 +310,7 @@ void Init_NVS_Keys(){
  * BLE PROCESS
 *****************************************************/
 // BLE event handling
-static int ble_gap_event(struct ble_gap_event *event, void *arg){
-
+static int ble_gap_event(struct ble_gap_event *event, void *arg){  
     if (active_scan_process==0) {
         // ESP_LOGW("GAP", "ble suspend");
         return 0;
@@ -322,15 +333,15 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg){
 			}
 			// verifcamos si la mac existe en nuestra lista y obtnemos el indice
             uint8_t info_idx=0;
-			int ret_idx= ink_get_indx_to_list_reg(addr_scan, list_ble_info,&info_idx);
-			char mac_str_aux[20];
-			ink_addr_to_string(addr_scan, mac_str_aux);
-			
+			int ret_idx_info= ink_get_indx_to_list_reg(addr_scan, list_ble_info,&info_idx);
 			// validamos el indice retornado;
             ESP_LOGI("GAP", "RSSI: %d", event->disc.rssi);
 
-			if (ret_idx==0){
-                ESP_LOGI("GAP","addr: %s, idx %d\r\n", mac_str_aux, info_idx);
+			if (ret_idx_info ==0){
+                ESP_LOGI("GAP","addr %02X:%02X:%02X:%02X:%02X:%02X", 
+                        addr_scan[0], addr_scan[1], addr_scan[2],
+                        addr_scan[3], addr_scan[4], addr_scan[5]);
+
                 WAIT_MS(500);
 				// obtenemos el indice para registrar la data
 				int rep_idx= ink_get_indx_to_list_report(addr_scan, list_ble_report);
@@ -349,9 +360,22 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg){
                     
                     // update state
 					list_ble_report.ls_ble[rep_idx].ready = 1;
-				}
+
+                    /*---------CHECK RANGE TEMP--------*/
+                    int ret_alarm = m_get_temp_alert(list_ble_report.ls_ble[rep_idx]);
+                    if (ret_alarm == ALARM_ACTIVE){
+                        data_alarm_t d_alarm={0};
+                        memcpy(d_alarm.addr,list_ble_report.ls_ble[rep_idx].ble_info.addr,LEN_ADDR_BLE);
+                        d_alarm.time = list_ble_report.ls_ble[rep_idx].ble_data.time;
+                        d_alarm.idx  = rep_idx;
+                        // SEND ALERT
+                        xQueueSend(AlertCircQueue, &d_alarm, pdMS_TO_TICKS(500));
+				    }
+                }
 			}else{
-                ESP_LOGW("GAP","addr: %s \r\n", mac_str_aux);
+            ESP_LOGW("GAP","addr %02X:%02X:%02X:%02X:%02X:%02X", 
+                    addr_scan[0], addr_scan[1], addr_scan[2],
+                    addr_scan[3], addr_scan[4], addr_scan[5]);
             }
         }
         break;
@@ -462,7 +486,7 @@ void OTA_Modem_Check(void){
 /***********************************************
  * MODEM UART TASK
 ************************************************/
-
+/*
 static void Modem_rx_task(void *pvParameters){
     uart_event_t event;
     uint8_t* dtmp = (uint8_t*) malloc(RD_BUF_SIZE);
@@ -475,6 +499,42 @@ static void Modem_rx_task(void *pvParameters){
 				uart_read_bytes(modem_uart.uart_num, dtmp, event.size, portMAX_DELAY*2);
 				p_RxModem=dtmp;
 				rx_modem_ready=1;
+            }
+        }
+        vTaskDelay(100/portTICK_PERIOD_MS);
+    }
+    free(dtmp);
+    dtmp = NULL;
+    vTaskDelete(NULL);
+}
+*/
+
+static void Modem_rx_task(void *pvParameters){
+    uart_event_t event;
+    uint8_t* dtmp = (uint8_t*) malloc(RD_BUF_SIZE);
+    p_RxModem = dtmp;
+    int ring_buff_len;
+    for(;;) {
+        //Waiting for UART event.
+        if(xQueueReceive(uart_modem_queue, (void * )&event, (TickType_t )portMAX_DELAY)) {
+            if(end_task_uart_m95 > 0){
+                break;
+            }
+            switch(event.type) {
+                case UART_DATA:
+                    if(event.size >= 120){
+                        ESP_LOGE(TAG, "OVER [UART DATA]: %d", event.size);
+                        vTaskDelay(200/portTICK_PERIOD_MS);
+                    }
+                    if(rx_modem_ready == 0){
+                        bzero(dtmp, RD_BUF_SIZE);
+                        uart_get_buffered_data_len(modem_uart.uart_num,(size_t *)&ring_buff_len);
+                        rxBytesModem = uart_read_bytes(modem_uart.uart_num,dtmp,ring_buff_len,0);                        
+                        rx_modem_ready = 1;
+                    }
+                    break;
+                default:
+                    break;
             }
         }
         vTaskDelay(100/portTICK_PERIOD_MS);
@@ -576,6 +636,31 @@ void Info_Send(void){
 }
 
 
+void ALERT_send(int idx_ble){
+	int status = 0;
+	int data_len=0;
+	char topico[100]={0};
+	
+	ESP_LOGI("BLE-SEND","Enviando data por MQTT... \r\n");
+	char mac_aux[20];
+	status = CheckRecMqtt();
+	if(status ==MD_MQTT_CONN_OK){
+		//M95_PubMqtt_data(aux_buff,topico,strlen(aux_buff),tcpconnectID);
+        if (list_ble_report.ls_ble[idx_ble].ready!=0){
+            ink_addr_to_string(list_ble_report.ls_ble[idx_ble].ble_info.addr, mac_aux);
+            sprintf(topico,"%s/%s/%s",MASTER_TOPIC_MQTT,data_modem.info.imei,mac_aux);
+            js_record_data_ble(list_ble_report.ls_ble[idx_ble], buff_aux);
+
+            data_len = strlen(buff_aux);
+            Modem_Mqtt_Pub(buff_aux,topico,data_len,mqtt_idx, 0);
+            WAIT_S(1);
+		}
+	}
+    current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+    Modem_call_Phone("938020675",20);
+	printf("BLE: Data de sensor enviada \r\n");
+}
+
 
 void BLE_send(void){
 	int status = 0;
@@ -615,16 +700,15 @@ void MQTT_Read(void){
     int state_mqtt_sub=-0x01;
     static char topic_sub[60]={0};
     sprintf(topic_sub,"%s/%s/CONFIG",MASTER_TOPIC_MQTT, data_modem.info.imei);
-
     state_mqtt_sub = Modem_Mqtt_Sub_Topic(mqtt_idx, topic_sub, buff_aux);
     printf("sub mqtt= 0x%X\r\n",state_mqtt_sub);
     if (state_mqtt_sub == MD_CFG_SUCCESS) {
         printf("DATA: %s\r\n",buff_aux);
-        sprintf(topic_sub,"%s/%s/AWS",MASTER_TOPIC_MQTT, data_modem.info.imei);
-        //Modem_Mqtt_Pub(buff_aux,topic_sub,strlen(buff_aux),mqtt_idx,0);
+        // sprintf(topic_sub,"%s/%s/AWS",MASTER_TOPIC_MQTT, data_modem.info.imei);
+        // Modem_Mqtt_Pub(buff_aux,topic_sub,strlen(buff_aux),mqtt_idx,0);
     }
     
-    Modem_Mqtt_Unsub(mqtt_idx, topic_sub);
+    // Modem_Mqtt_Unsub(mqtt_idx, topic_sub);
     return;
 }
 
@@ -650,10 +734,10 @@ void SMS_check(void){
         if (strstr(message,"BLE")!=NULL){
 			enviar_sms=1;
 			if(strstr(message,"BLE,T,")!=NULL){
-                int delay_aux =extraer_numero(message);
-				if (delay_aux>1){
-					delay_ble = delay_aux;
-					ESP_LOGW(TAG_SMS,"NEW TIME SUCCESFULL: %d",delay_ble);
+                int delay_aux =m_get_delay(message);
+				if (delay_aux>=1){
+					interval_ble = delay_aux;
+					ESP_LOGW(TAG_SMS,"NEW TIME SUCCESFULL: %d",interval_ble);
 				}else{
 					ESP_LOGW(TAG_SMS,"FAIL UPDATE SLEEP TIME");
 				}
@@ -674,6 +758,7 @@ void SMS_check(void){
                     WAIT_MS(100);
                     active_scan_process = 1; // ACTIVE SCAN PROCCES
                     ESP_LOGI(TAG_SMS,"BLE ADD OK");
+                    Info_time -= interval_info*60;
                 }else{
                     ESP_LOGE(TAG_SMS,"MAC IS INCORRECT");
                 }
@@ -713,7 +798,7 @@ void SMS_check(void){
 		nvs_erase_key(storage_nvs_handle,KEY_BLE_LIST);
 		nvs_erase_key(storage_nvs_handle,KEY_IP_MQTT);
 
-		nvs_set_u16(storage_nvs_handle, KEY_BLE_TIME,delay_ble);
+		nvs_set_u16(storage_nvs_handle, KEY_BLE_TIME,interval_ble);
 		nvs_set_blob(storage_nvs_handle, KEY_BLE_LIST, &list_ble_info, sizeof(ink_list_ble_info_t));
 		nvs_set_str(storage_nvs_handle, KEY_IP_MQTT,ip_mqtt_connect);
 
@@ -736,7 +821,7 @@ void SMS_check(void){
 						"Interval: %u min\n"
 						"List:\n"
 						"%s",
-						data_modem.info.imei, ip_mqtt_connect, PROJECT_VER, delay_ble,buff_aux);
+						data_modem.info.imei, ip_mqtt_connect, PROJECT_VER, interval_ble,buff_aux);
 		ret_sms = Modem_SMS_Send(message, phone);
 		vTaskDelay(pdMS_TO_TICKS(5000));
 		ESP_LOGI(TAG_SMS, "send sms status :0x%X",ret_sms);
@@ -776,19 +861,18 @@ static void M95_Watchdog(void* pvParameters){
  * CIRCULINA TASK
 **********************************************/
 void AlarmTask(void *pvParameters) {
-    int alert_value;
-    while (1) {
 
-        if (xQueueReceive(AlertQueue, &alert_value, portMAX_DELAY) == pdTRUE) {
+    data_alarm_t lst_alert_data[MAX_BLE_DEVICES]={0};
+    data_alarm_t alert_data;
+    while (1){
+        if (xQueueReceive(AlertCircQueue, &alert_data, portMAX_DELAY) == pdTRUE) {
             // Se recibió un valor de sensor fuera de límites
-            if (alert_value == ALERT_BLE_TMAX) {
+            double interval = difftime( alert_data.time, lst_alert_data[alert_data.idx].time);
+            if (interval>= interval_circ*60){
+                ESP_LOGE("GAP","alert device: %d",alert_data.idx);
+                lst_alert_data[alert_data.idx]=alert_data;
                 gpio_set_level(PIN_CIRCULINA,1);
-                WAIT_S(delay_tmax);
-                gpio_set_level(PIN_CIRCULINA,0);
-
-            } else if (alert_value == ALERT_BLE_TMIN) {
-                gpio_set_level(PIN_CIRCULINA,1);
-                WAIT_S(delay_tmin);
+                WAIT_S(delay_circ);
                 gpio_set_level(PIN_CIRCULINA,0);
             }
         }
@@ -801,48 +885,19 @@ void AlarmTask(void *pvParameters) {
 **********************************************/
 static void Main_Task(void* pvParameters){
     WAIT_S(3);
+    int alert_status;
 	for(;;){
         
 		current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 		if (current_time%30==0){
 			printf("Tiempo: %lu\r\n",current_time);
 		}
+        /*
+        if (xQueueReceive(AlertCircQueue, &alert_status, pdTICKS_TO_MS(500)) == pdTRUE){
+        }*/
         
         
-        // SEND INFO DATA
-		if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= Info_time){
-			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-			Info_time+= 5*60;// cada 5 min
-			if(ret_update_time!=MD_CFG_SUCCESS){
-			    ret_update_time=Modem_update_time(1);
-			}
-            Info_Send();
-            WAIT_S(1);
-		}
-
-		if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= BLE_time){
-			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-			BLE_time += delay_ble*60;
-			printf("----send ble time---\r\n");
-
-			active_scan_process=0; // no proceso
-			WAIT_S(1);
-			if (list_ble_info.num_info>0){
-				BLE_send();
-			}
-			active_scan_process = 1;
-			printf("BLE SEND in %u mins\r\n",delay_ble);
-			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-		}
         
-
-        // SEND CHECK READ DATA
-        if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= MQTT_read_time){
-			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-			MQTT_read_time+= 10;        // cada 20 seg
-            // MQTT_Read();
-            WAIT_S(1);
-		}
         if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= SMS_time){
 			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 			SMS_time += 5;
@@ -852,9 +907,45 @@ static void Main_Task(void* pvParameters){
 			vTaskDelay(100);
         }
         
+        
+        // SEND INFO DATA
+		if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= Info_time){
+			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+			Info_time+= interval_info*60;// cada 5 min
+			if(ret_update_time!=MD_CFG_SUCCESS){
+			    ret_update_time=Modem_update_time(1);
+			}
+            Info_Send();
+            WAIT_S(1);
+		}
+
+		if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= BLE_time){
+			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+			BLE_time += interval_ble*60;
+			printf("----send ble time---\r\n");
+
+			active_scan_process=0; // no proceso
+			WAIT_S(1);
+			if (list_ble_info.num_info>0){
+				BLE_send();
+			}
+			active_scan_process = 1;
+			printf("BLE SEND in %u mins\r\n",interval_ble);
+			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+		}
+        // SEND CHECK READ DATA
+        if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= MQTT_read_time){
+			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+			MQTT_read_time+= 60;// cada 1min seg
+			//MQTT_Read();
+            current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+            WAIT_S(1);
+		}
+
+
         if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= OTA_md_time){
 			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-			OTA_md_time += 30;
+			OTA_md_time += 60;
 			OTA_Modem_Check();
 			printf("Siguiente ciclo en 60 segundos\r\n");
 			printf("OTA CHECK tomo %lu segundos\r\n",(pdTICKS_TO_MS(xTaskGetTickCount())/1000-current_time));
@@ -962,9 +1053,9 @@ void app_main(void){
 					ip_mqtt_connect,
 					PROJECT_NAME,
 					PROJECT_VER);
-	ret_main = Modem_SMS_Send(buff_aux,"+51936910211");
+	// ret_main = Modem_SMS_Send(buff_aux,"+51936910211");
 	ESP_LOGI(TAG, "send sms status :0x%X",ret_main);
-    WAIT_S(5);
+    // WAIT_S(5);
 
 	OTA_md_time     = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 	Info_time       = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
@@ -973,11 +1064,13 @@ void app_main(void){
     BLE_time        = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 	current_time    = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
     
-    AlertQueue = xQueueCreate(5, sizeof(int));
+    AlertCircQueue = xQueueCreate(5, sizeof(data_alarm_t));
+    AlertMqttQueue = xQueueCreate(5, sizeof(int));
+
+    
     xTaskCreate(Main_Task,"Main_Task",1024*10,NULL,10, & MAIN_task_handle);
     xTaskCreate(AlarmTask,"AlarmTask",1024*2,NULL, 5, &ALARM_Task_handle);
     xTaskCreate(M95_Watchdog,"M95_Watchdog",2048, NULL,11,NULL);
-    
     init_ble_scann();
     WAIT_S(2);
     if (ret_init_scan!=0){
@@ -985,5 +1078,14 @@ void app_main(void){
 		esp_restart();
 	}
     
+
+ 
+   /// while (1) {
+    // ret_main=Modem_call_Phone("938020675",20);
+
+    // ESP_LOGI("CALL","status: %d",ret_main);
+    // WAIT_S(120);
+
+    // }
 }
 

@@ -45,7 +45,9 @@
         "variant": "c",
         "*.inc": "c",
         "limits": "c",
-        "semaphore": "c"
+        "semaphore": "c",
+        "algorithm": "c",
+        "cstdint": "c"
     },
     "idf.portWin": "COM7"
 }

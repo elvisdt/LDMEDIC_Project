@@ -63,12 +63,14 @@ int js_record_data_ble(ink_ble_report_t data, char *buffer){
     cJSON_AddNumberToObject(root, "tem", temp);
     cJSON_AddNumberToObject(root, "hum", hum);
     cJSON_AddNumberToObject(root, "bat", battery);
-    cJSON_AddNumberToObject(root, "cfg", data.ble_info.limits.mode);
-    if (data.ble_info.limits.mode==1){
-        cJSON_AddNumberToObject(root, "Tmax", data.ble_info.limits.Tmax);
-        cJSON_AddNumberToObject(root, "Tmin", data.ble_info.limits.Tmin);
-    }
     
+
+    cJSON *limit = cJSON_CreateObject();
+    cJSON_AddNumberToObject(limit, "md", data.ble_info.limits.mode);
+    cJSON_AddNumberToObject(limit, "Tmx", data.ble_info.limits.Tmax);
+    cJSON_AddNumberToObject(limit, "Tmn",  data.ble_info.limits.Tmin);
+    cJSON_AddItemToObject(root, "lmt", limit);
+
     char *json = cJSON_PrintUnformatted(root);
     sprintf(buffer,"%s\r\n",json);
     cJSON_Delete(root);

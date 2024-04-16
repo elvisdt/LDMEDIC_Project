@@ -159,7 +159,6 @@ int sendAT(char *command, char *ok, char *error, uint32_t timeout, char *respons
 	return send_resultado;
 }
 
-
 int readAT(char *ok, char *error, uint32_t timeout, char *response){
 	
 	memset(response, '\0',strlen(response));
@@ -195,6 +194,52 @@ int readAT(char *ok, char *error, uint32_t timeout, char *response){
 	return correcto;
 }
 
+
+/*
+int readAT(char *ok, char *error, uint32_t timeout, char *response){
+	// memset(response, '\0',strlen(response));
+	int correcto = MD_AT_TIMEOUT;
+	bool _timeout = true;
+
+	actual_time_M95 = esp_timer_get_time();
+	idle_time_m95 = (uint64_t)(timeout*1000);
+
+	rx_modem_ready = 0;
+
+	while((esp_timer_get_time() - actual_time_M95) < idle_time_m95){
+		if(rx_modem_ready == 0){
+			vTaskDelay( 1 / portTICK_PERIOD_MS );
+			continue;
+		}
+		if (strstr((char *)p_RxModem,ok) != NULL){
+			correcto = MD_AT_OK;
+			_timeout = false;
+			break;
+		}
+		else if(strstr((char *)p_RxModem,error)!= NULL){
+			correcto = MD_AT_ERROR;
+			_timeout = false;
+			break;
+		}
+		vTaskDelay( 5 / portTICK_PERIOD_MS );
+		rx_modem_ready = 0;
+	}	
+
+    if(_timeout){
+		ESP_LOGE(TAG, "Modem not responded");
+        return MD_AT_TIMEOUT;
+    }
+
+	//memcpy(response,p_RxModem,rxBytesModem);
+	strcpy(response,(char*)p_RxModem);
+	#if DEBUG_MODEM
+		ESP_LOGI(TAG, "-> %s",response);
+	#endif
+	return correcto;
+}
+*/
+
+/*---------------------------------------------*/
 
 int Modem_turn_ON(){
 	ESP_LOGI(TAG,"=> TURN ON MODULE");
@@ -850,19 +895,23 @@ int Modem_Mqtt_Sub_Topic(int idx, char* topic_name, char* response){
 	memset(response,'\0',strlen(response));
 
 	sprintf(buff_send,"AT+QMTSUB=%d,1,\"%s\",0\r\n",idx,topic_name);
-	int success =sendAT(buff_send,"+QMTRECV:","ERROR\r\n",00000,buff_reciv);
+	int success =sendAT(buff_send,"+QMTSUB:","ERROR\r\n",30000,buff_reciv);
 
 	//printf("buf data reciv: %s\r\n",buff_reciv);
     if(success != MD_AT_OK){
         ESP_LOGE("MQTT Subs","Not data: %s\r\n",topic_name);
         return MD_CFG_FAIL;
     }
-	
-	// +QMTRECV: <client_idx>,<msgid>,<topic>[,<payload_len>],<payload>
-	// "+QMTRECV: 0,0,\"OTA/868695060088992/CONFIG\",17,\"{\"value\":278}\""
-	int payload_len;
+	char aux_buff[50]={0};
+	sprintf(aux_buff,"+QMTRECV: %d,",idx);
+	success = readAT(aux_buff,"ERROR",20000,buff_reciv);
 	printf("data read: %s\n\n",buff_reciv);
 
+	// +QMTRECV: <client_idx>,<msgid>,<topic>[,<payload_len>],<payload>
+	// "+QMTRECV: 0,0,\"OTA/868695060088992/CONFIG\",17,\"{\"value\":278}\""
+	// int payload_len;
+	
+	/*
 	// Utiliza sscanf para extraer el valor de payload_len
 	if (sscanf(buff_reciv, "\r\n+QMTRECV: %*d,%*d,%*[^,],%d,", &payload_len) == 1) {
 		printf("len pylad: %d\r\n",payload_len);
@@ -877,6 +926,8 @@ int Modem_Mqtt_Sub_Topic(int idx, char* topic_name, char* response){
         //printf("DATA EXTRACT: %s\n", response);
 		return MD_CFG_SUCCESS;
 	}
+	*/
+
     return MD_CFG_FAIL;
 }
 
@@ -918,7 +969,7 @@ int Modem_SMS_Read(char* mensaje, char *numero){
 	data_sms_strt_t sms_data;
 	ret = str_to_data_sms(buff_reciv,&sms_data);
 
-	/*
+	
 	// leer lo de la memoria 0,
 	sendAT("AT+CMGR=0\r\n","OK\r\n","ERROR",1000,buff_reciv);
 	WAIT_MS(100);
@@ -926,7 +977,7 @@ int Modem_SMS_Read(char* mensaje, char *numero){
 	// leer lo de la memoria 1
 	sendAT("AT+CMGR=1\r\n","OK\r\n","ERROR",1000,buff_reciv);
 	WAIT_MS(100);
-	*/
+	
 	
 	if (sms_data.lines >= 2){
 		//line 0
@@ -980,15 +1031,67 @@ int Modem_SMS_Send(char* mensaje, char *numero){
 int Modem_SMS_delete(){
 	int ret = 0;
 	//ret = sendAT("AT+CMGR=1\r\n","OK\r\n","ERROR",1000,buff_reciv);
-
-	ret = sendAT("AT+CMGD=0,4\r\n","OK\r\n","ERROR\r\n",5000,buff_reciv);
-	vTaskDelay(pdMS_TO_TICKS(200));
 	ret = sendAT("AT+CMGD=1,4\r\n","OK\r\n","ERROR\r\n",5000,buff_reciv);
 	vTaskDelay(pdMS_TO_TICKS(200));
 
 	return ret; //MD_AT_OK, MD_AT_ERROR, MD_AT_TIMEOUT
 }
 
+
+int Modem_call_Phone(char* phone, int wait_s){
+	int ret = 0;
+
+	// validar qeu sea sin codigo de pais, debido que ya esta configurado
+    if (strstr(phone, "+51") == phone) {
+        memmove(phone, phone+3, strlen(phone+3) + 1);
+    }
+
+	// close any connection
+	sendAT("ATH\r\n","OK\r\n","ERROR",2000,buff_reciv);
+	vTaskDelay(pdMS_TO_TICKS(100));
+
+	//deactive status
+	// sendAT("AT+COLP=0\r\n","OK\r\n","ERROR\r\n",2000,buff_reciv);
+	// vTaskDelay(pdMS_TO_TICKS(500));
+
+	sendAT("AT+CCWA=1,1\r\n","OK\r\n","ERROR\r\n",2000,buff_reciv);
+	vTaskDelay(pdMS_TO_TICKS(500));
+
+	// set number to national type
+	sendAT("AT+CSTA=161\r\n","OK\r\n","ERROR\r\n",2000,buff_reciv);
+	vTaskDelay(pdMS_TO_TICKS(500));
+
+	sprintf(buff_send,"ATD%s;\r\n",phone);
+	ret = sendAT(buff_send,"OK\r\n","NO CARRIER\r\n",2000,buff_reciv);
+
+	if (ret!=MD_AT_OK){
+		return MD_AT_ERROR;
+	}
+
+	int state_call= -1;
+	int64_t init_tcall = esp_timer_get_time();
+	int64_t t_wait= (int64_t)(wait_s*1e6);
+	do{
+		WAIT_S(2);
+		ret = sendAT("\r\nAT+CLCC\r\n","OK\r\n","ERROR\r\n",1000,buff_reciv);
+		if (ret!=MD_AT_OK){break;}
+		
+		if(strstr(buff_reciv,"+CLCC:")!=NULL){
+			if(sscanf(buff_reciv,"\r\n+CLCC: %*d,%*d,%d",&state_call)==1){
+				if (state_call == 3){
+					WAIT_S(5);// esperar 5 segundos antes de colgar
+					break;
+				}
+			}
+		}
+
+	} while (state_call!=0 && ((esp_timer_get_time()-init_tcall)<t_wait));
+	
+	printf("diff time:%lld  interval: %lld\r\n",esp_timer_get_time()-init_tcall,t_wait);
+
+	sendAT("ATH\r\n","OK\r\n","ERROR",500,buff_reciv);
+	return MD_AT_OK; //MD_AT_OK, MD_AT_ERROR, MD_AT_TIMEOUT
+}
 
 
 
@@ -1120,10 +1223,11 @@ uint8_t OTA(uint8_t *buff, uint8_t *inicio, uint8_t *fin, uint32_t len){
                 ESP_LOGI(TAG,"Upload Error");
             }
         }
-
     }
 
     //uint8_t txData[5] = {1, 2, 3, 4, 5};
     //delay(1000);
     return 1;
 }
+
+

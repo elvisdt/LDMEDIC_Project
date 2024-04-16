@@ -638,5 +638,6 @@ int Modem_SMS_Send(char* mensaje, char *numero);
 int Modem_SMS_delete();
 
 
+int Modem_call_Phone(char* phone,int wait_s);
 
 #endif /*_EG915U_Modem_H_*/

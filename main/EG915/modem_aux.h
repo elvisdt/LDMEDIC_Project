@@ -75,4 +75,7 @@ int remove_word_from_string(char *input_string, const char *target);
  */
 void extraer_ultimos(const char *cadena_entrada, size_t longitud, char *ultimos_datos);
 
+
+void extract_back_to_key(char *frase, const char *clave);
+
 #endif /* _MODEM_AUX_H_ */

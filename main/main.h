@@ -11,6 +11,8 @@
 /************************************************
  * DEFINES
 *************************************************/
+#define ALARM_ACTIVE    0x01
+#define ALARM_DEACTIVE  0X00
 
 /************************************************
  * STRUCTURES
@@ -26,11 +28,10 @@ typedef struct modem_gsm{
 
 
 typedef struct {
-    char mac[20];
-    char name[10];
-    float tem_max;
-    float tem_min;
-}cfg_ble_t;
+    uint8_t addr[LEN_ADDR_BLE];
+    time_t  time;
+    uint8_t idx;
+}data_alarm_t;
 
 
 
@@ -56,7 +57,7 @@ int split_and_check_IP(char* cadena, char* ip);
 /**
  * Extrar el numero de la trama "BLE,T,<number>"
 */
-int extraer_numero(const char* cadena);
+int m_get_delay(const char* cadena);
 
 
 /**
@@ -75,8 +76,6 @@ int extraer_numero(const char* cadena);
 int m_get_params_ble(char *cadena, ink_ble_info_t* ble_info); 
 
 
-int extraer_mac_tmax_tmin(char *cadena, char *mac, float* tmax, float* tmin);
-/************************************************
- * JASON PARSER
-*************************************************/
+int m_get_temp_alert(ink_ble_report_t data);
+
 #endif /*_MAIN_H_*/

@@ -26,8 +26,6 @@ void add_line(data_sms_strt_t* ds, const char* line) {
     }
 }
 
-
-
 int str_to_data_sms(const char* input_string, data_sms_strt_t* data) {
     data->lines = 0;
     data->data = NULL;
@@ -77,20 +75,17 @@ void remove_newlines(char* str) {
     }
 }
 
-
 void str_to_lowercase(char *str) {
     for(int i = 0; str[i]; i++){
         str[i] = tolower((unsigned char)str[i]);
     }
 }
 
-
 void str_to_uppercase(char *str) {
     for(int i = 0; str[i]; i++){
         str[i] = toupper((unsigned char)str[i]);
     }
 }
-
 
 int find_phone_and_extract(char* input_string, char* phone) {
     // Busca el parámetro en el string
@@ -115,6 +110,22 @@ int find_phone_and_extract(char* input_string, char* phone) {
 
 
 
+void extraer_posterior_a_clave(char *frase, const char *clave) {
+    char *resultado;
+
+    // Buscar la palabra clave en la frase
+    resultado = strstr(frase, clave);
+
+    if (resultado) {
+        // Mover el puntero al final de la palabra clave
+        resultado += strlen(clave);
+
+        // Copiar el resultado de vuelta a la frase original
+        memmove(frase, resultado, strlen(resultado) + 1);
+    }
+}
+
+
 int remove_word_from_string(char *input_string, const char *target) {
     char *found = strstr(input_string, target);
     if (found) {
@@ -125,6 +136,7 @@ int remove_word_from_string(char *input_string, const char *target) {
         return -1; // La palabra no se encontró
     }
 }
+
 
 void extraer_ultimos(const char *cadena_entrada, size_t longitud, char *ultimos_datos) {
     size_t longitud_entrada = strlen(cadena_entrada);

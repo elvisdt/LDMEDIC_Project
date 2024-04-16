@@ -4,9 +4,10 @@
 #include "esp_system.h"
 
 
-int extraer_numero(const char* cadena) {
+int m_get_delay(const char* cadena) {
     int numero;
-    if (sscanf(cadena, "BLE,T,%d", &numero) == 1) {
+
+    if (sscanf(cadena, "%*[^,],T,%d", &numero) == 1) {
         if (numero >= 0 && numero <= 99) {
             return numero;
         } else {
@@ -97,21 +98,35 @@ int m_get_params_ble(char *cadena, ink_ble_info_t* ble_info){
         strcpy(ble_info->name,name_aux);
         ble_info->limits.mode = 1;
         ble_info->limits.Tmax = (t_n1 > t_n2) ? t_n1 : t_n2;
-        ble_info->limits.Tmin =(t_n1 < t_n2) ? t_n1 : t_n2;
+        ble_info->limits.Tmin = (t_n1 < t_n2) ? t_n1 : t_n2;
         return 0; // SUCCESFULL PARSE
     }
     
     return -1;
 }
 
-// Función para extraer la dirección MAC y los limites de temperatura maxima y minima 
-int extraer_mac_tmax_tmin(char *cadena, char *mac, float* tmax, float* tmin) {
-    // "BLE,C,<MAC>,<TMAX>,<TMIN>";
-    // Se ignora la parte inicial "BLE,C,"
-    if (sscanf(cadena,"BLE,C,%[^,],%f,%f", mac,tmax,tmin) == 3) {
-        printf("Dirección MAC: %s\n", mac);
-        printf("tmax: %.2f, tmin: %.2f\n",*tmax,*tmin);
-        return 1; // OK
-    } 
-    return 0; // FAIL
+
+/**
+ * @brief Determina si hay una alerta de temperatura activa o no.
+ *
+ * Esta función determina si hay una alerta de temperatura activa o no 
+ * basada en los datos del informe BLE proporcionados.
+ *
+ * @param data Informe BLE que contiene la información de temperatura y límites de alarma.
+ * @return Retorna ALARM_ACTIVE si la temperatura está fuera del rango de alarma, ALARM_DEACTIVE si está dentro del rango de alarma, o un valor de retorno negativo en caso de error.
+ */
+int m_get_temp_alert(ink_ble_report_t data){
+    // Check alarm status
+    if (data.ble_info.limits.mode ==0) {
+        return ALARM_DEACTIVE;
+    }
+
+    // validate to alarm range 
+    float temp= Inkbird_temperature(data.ble_data.manuf_data);
+    if (temp >= data.ble_info.limits.Tmin && temp <= data.ble_info.limits.Tmax) {
+        return ALARM_DEACTIVE;
+    }
+
+    return ALARM_ACTIVE;
 }
+
