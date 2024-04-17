@@ -110,9 +110,7 @@ int m_get_params_ble(char *cadena, ink_ble_info_t* ble_info){
 int m_get_alert_phone(char *cadena){
     // "BLE,ADD,<MAC>,<NAME>,[<TMAX>,<TMIN>]";
     // BLE,A,49:23:04:08:24:62,N1F,-20.2,15.5
-    int ret=0;
     char prefix[4], number[11];
-
     // Extraer la información después de la coma
     sscanf(cadena, "%*[^,],%s", number);
 
@@ -139,16 +137,27 @@ int m_get_alert_phone(char *cadena){
  */
 int m_get_temp_alert(ink_ble_report_t data){
     // Check alarm status
+    float t_min= (float)data.ble_info.limits.Tmin - 0.3;
+    float t_max= (float)data.ble_info.limits.Tmax + 0.3;
+
     if (data.ble_info.limits.mode ==0) {
         return ALARM_DEACTIVE;
     }
 
     // validate to alarm range 
     float temp= Inkbird_temperature(data.ble_data.manuf_data);
-    if (temp >= data.ble_info.limits.Tmin && temp <= data.ble_info.limits.Tmax) {
+    if ((temp >= t_min) && (temp <= t_max)) {
         return ALARM_DEACTIVE;
     }
 
     return ALARM_ACTIVE;
 }
 
+
+
+void m_epoch_to_str(time_t rawtime, char* buffer, size_t len) {
+    struct tm * timeinfo;
+    rawtime -=5*60; // -5 horas hora local
+    timeinfo = localtime(&rawtime);
+    strftime(buffer, len, "%Y-%m-%d %H:%M:%S", timeinfo);
+}

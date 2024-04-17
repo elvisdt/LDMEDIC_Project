@@ -1,7 +1,7 @@
 {
     "version":            "1.1",
     "project_name":       "LDMEDIC_BLE",
-    "project_version":    "1.1",
+    "project_version":    "1.2",
     "project_path":       "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT",
     "idf_path":           "C:/esp32/esp-idf-v5.2.1",
     "build_dir":          "D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build",

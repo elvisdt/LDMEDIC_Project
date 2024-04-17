@@ -47,7 +47,9 @@
         "limits": "c",
         "semaphore": "c",
         "algorithm": "c",
-        "cstdint": "c"
+        "cstdint": "c",
+        "adc_cali.h": "c",
+        "stdlib.h": "c"
     },
     "idf.portWin": "COM7"
 }

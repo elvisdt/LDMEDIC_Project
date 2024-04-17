@@ -14,7 +14,7 @@
 // #define MQTT_CONNECTION
 
 
-#define APN     "smglobal.entel.pe" //
+#define APN     "claro.pe" //"smglobal.entel.pe" //
 
 // #define APN     "movistar.pe"//
 

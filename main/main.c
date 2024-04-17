@@ -144,7 +144,7 @@ ink_list_ble_report_t list_ble_report={0};
 
 uint8_t     interval_info = 5;   //min
 uint16_t    interval_ble  = INIT_INTERVAL_BLE;// min
-uint16_t    interval_circ = 1; // min
+uint16_t    interval_circ = 5; // min
 
 uint32_t    Info_time=0;
 uint32_t    MQTT_read_time=0;
@@ -500,7 +500,7 @@ void OTA_Modem_Check(void){
 /***********************************************
  * MODEM UART TASK
 ************************************************/
-/*
+
 static void Modem_rx_task(void *pvParameters){
     uart_event_t event;
     uint8_t* dtmp = (uint8_t*) malloc(RD_BUF_SIZE);
@@ -521,8 +521,9 @@ static void Modem_rx_task(void *pvParameters){
     dtmp = NULL;
     vTaskDelete(NULL);
 }
-*/
 
+
+/*
 static void Modem_rx_task(void *pvParameters){
     uart_event_t event;
     uint8_t* dtmp = (uint8_t*) malloc(RD_BUF_SIZE);
@@ -557,6 +558,8 @@ static void Modem_rx_task(void *pvParameters){
     dtmp = NULL;
     vTaskDelete(NULL);
 }
+
+*/
 
 
 int CheckRecMqtt(void){
@@ -655,7 +658,7 @@ void ALERT_send(uint8_t idx_ble){
 	int data_len=0;
 	char topico[100]={0};
 	
-	ESP_LOGI("BLE-SEND","Enviando data por MQTT... \r\n");
+	ESP_LOGI("ALERT","Enviando data por MQTT... \r\n");
 	char mac_aux[20];
 	status = CheckRecMqtt();
 	if(status ==MD_MQTT_CONN_OK){
@@ -669,23 +672,40 @@ void ALERT_send(uint8_t idx_ble){
         WAIT_S(1);
 		
 	}
-
     current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+
     if (phone_alrm.status==1){
         float tmp_aux = Inkbird_temperature(list_ble_report.ls_ble[idx_ble].ble_data.manuf_data);
-
-        sprintf(buff_aux,"ALERTA!\n%s\n%s\nTemp:%.2f\nRango: (%d a %d)",
+        char time_str[50] ={0};
+        m_epoch_to_str(list_ble_report.ls_ble[idx_ble].ble_data.time,time_str, sizeof(time_str));
+        
+        memset(buff_aux,'\0',strlen(buff_aux));
+        sprintf(buff_aux,"ALERTA!\n"
+                "Sensor: %s\n"
+                "Temperatura: %.2f C\n"
+                "Rango normal: %d a %d\n"
+                "%s",
                 list_ble_report.ls_ble[idx_ble].ble_info.name,
-                mac_aux,
                 tmp_aux,
                 list_ble_report.ls_ble[idx_ble].ble_info.limits.Tmin,
-                list_ble_report.ls_ble[idx_ble].ble_info.limits.Tmax);
+                list_ble_report.ls_ble[idx_ble].ble_info.limits.Tmax,
+                time_str);
         
+        ESP_LOGE("ALERTA","msg: %s",buff_aux);
+        ESP_LOGE("ALERTA","msg: %s",phone_alrm.phone);
+
         Modem_SMS_Send(buff_aux,phone_alrm.phone);
         current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+        WAIT_S(2);
+        current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+        Modem_SMS_Send(buff_aux,"+51989285671"); // numero de IVAN PROY
+        // Modem_SMS_Send(buff_aux,"+51936910211"); // numero de IVAN PROY
         WAIT_S(5);
         current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-        Modem_call_Phone(phone_alrm.phone,20);
+
+        // current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
+        // Modem_call_Phone(phone_alrm.phone,25);
+
     }
     current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 	printf("BLE ALERT: Data de sensor enviada \r\n");
@@ -785,7 +805,7 @@ void SMS_check(void){
     ESP_LOGI(TAG_SMS,"----> CHECK SMS <----");
 
 	int ret_sms = 0;
-	uint8_t sms_tmp[1024];
+	uint8_t sms_tmp[1024]={0};
 	char * message = (char *)sms_tmp;
 
 	char phone[20]={0};
@@ -901,8 +921,8 @@ void SMS_check(void){
 						"List:\n"
 						"%s",
 						data_modem.info.imei, ip_mqtt_connect, alert_phone, interval_ble, buff_aux);
-		ret_sms = Modem_SMS_Send(message, phone);
-		vTaskDelay(pdMS_TO_TICKS(5000));
+		// ret_sms = Modem_SMS_Send(message, phone);
+		// WAIT_S(5);
 		ESP_LOGI(TAG_SMS, "send sms status :0x%X",ret_sms);
 		printf("phone:%s\r\n",phone);
 		printf("send:\r\n%s\r\n",message);
@@ -1131,14 +1151,16 @@ void app_main(void){
 	sprintf(buff_aux,"IMEI: %s\n"
 					"ip_mqtt: %s\n"
 					"project: %s\n"
-					"code_ver: %s",
+					"code_ver: %s\n"
+                    "alerta: %s",
 					data_modem.info.imei,
 					ip_mqtt_connect,
 					PROJECT_NAME,
-					PROJECT_VER);
+					PROJECT_VER,
+                    phone_alrm.phone);
 	// ret_main = Modem_SMS_Send(buff_aux,"+51936910211");
 	ESP_LOGI(TAG, "send sms status :0x%X",ret_main);
-    // WAIT_S(5);
+    WAIT_S(5);
 
 	OTA_md_time     = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 	Info_time       = pdTICKS_TO_MS(xTaskGetTickCount())/1000;
@@ -1151,14 +1173,16 @@ void app_main(void){
     AlertMqttQueue = xQueueCreate(5, sizeof(uint8_t));
 
     
-    xTaskCreate(Main_Task,"Main_Task",1024*10,NULL,10, & MAIN_task_handle);
+    xTaskCreate(Main_Task,"Main_Task",1024*12,NULL,10, & MAIN_task_handle);
     xTaskCreate(AlarmTask,"AlarmTask",1024*2,NULL, 5, &ALARM_Task_handle);
     xTaskCreate(M95_Watchdog,"M95_Watchdog",2048, NULL,11,NULL);
+    
     init_ble_scann();
     WAIT_S(2);
     if (ret_init_scan!=0){
 		vTaskDelete(MAIN_task_handle);
 		esp_restart();
 	}
+
 }
 

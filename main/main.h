@@ -14,6 +14,9 @@
 #define ALARM_ACTIVE    0x01
 #define ALARM_DEACTIVE  0X00
 
+
+
+
 /************************************************
  * STRUCTURES
 *************************************************/
@@ -24,6 +27,7 @@ typedef struct modem_gsm{
 	int          signal;
 	time_t       time;
     uint8_t      num_ble;
+    float        bat_vol;
 }modem_gsm_t;
 
 
@@ -84,5 +88,7 @@ int m_get_params_ble(char *cadena, ink_ble_info_t* ble_info);
 int m_get_alert_phone(char *cadena);
 
 int m_get_temp_alert(ink_ble_report_t data);
+
+void m_epoch_to_str(time_t rawtime, char* buffer, size_t len);
 
 #endif /*_MAIN_H_*/

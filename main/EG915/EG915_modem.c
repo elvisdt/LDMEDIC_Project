@@ -397,6 +397,16 @@ int Modem_begin_commands(){
 	ret=sendAT("AT+CGREG?\r\n","1,","ERROR\r\n", 400, buff_reciv);
 	WAIT_MS(200);
 
+	// save SMS in SIM:
+	sendAT("AT+CPMS=?\r\n","OK\r\n","ERROR\r\n",5000,buff_reciv);
+	WAIT_MS(100);
+
+	sendAT("AT+CPMS=\"SM\",\"SM\",\"SM\",\"SM\"\r\n","OK\r\n","ERROR",5000,buff_reciv);
+	WAIT_MS(100);
+
+	sendAT("AT+CPMS?\r\n","OK\r\n","ERROR\r\n",5000,buff_reciv);
+	WAIT_MS(100);
+
 	sendAT("AT+CSMS?\r\n","OK\r\n","ERROR\r\n", 400, buff_reciv);
 	WAIT_MS(200);
 
@@ -1049,11 +1059,12 @@ int Modem_call_Phone(char* phone, int wait_s){
 	vTaskDelay(pdMS_TO_TICKS(500));
 
 	// set number to national type
-	sendAT("AT+CSTA=161\r\n","OK\r\n","ERROR\r\n",2000,buff_reciv);
-	vTaskDelay(pdMS_TO_TICKS(500));
+	// sendAT("AT+CSTA=161\r\n","OK\r\n","ERROR\r\n",2000,buff_reciv);
+	// vTaskDelay(pdMS_TO_TICKS(500));
 
 	sprintf(buff_send,"ATD%s;\r\n",phone);
-	ret = sendAT(buff_send,"OK\r\n","NO CARRIER\r\n",2000,buff_reciv);
+	ret = sendAT(buff_send,"OK\r\n","NO CARRIER",2000,buff_reciv);
+	printf("RET CALL: %s\r\n", buff_reciv);
 
 	if (ret!=MD_AT_OK){
 		return MD_AT_ERROR;
@@ -1105,9 +1116,9 @@ int TCP_open(char *ip_tcp, char *port_tcp){
 
 	sendAT("AT+QIACT?\r\n","OK","ERROR",10000,buff_reciv);
 
-    char res_esperada[]= "CONNECT";
+    // char res_esperada[]= "CONNECT";
     sprintf(buff_send,"AT+QIOPEN=1,0,\"TCP\",\"%s\",%s,0,2\r\n",ip_tcp, port_tcp);
-    int ret = sendAT(buff_send,res_esperada,"NO CARRIER",150000,buff_reciv);
+    int ret = sendAT(buff_send,"CONNECT","ERROR",150000,buff_reciv);
     if(ret != MD_AT_OK){
 		return MD_TCP_OPEN_FAIL;
 	}
