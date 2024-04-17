@@ -699,8 +699,8 @@ void ALERT_send(uint8_t idx_ble){
         WAIT_S(2);
         current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
         Modem_SMS_Send(buff_aux,"+51989285671"); // numero de IVAN PROY
-        // Modem_SMS_Send(buff_aux,"+51936910211"); // numero de IVAN PROY
-        WAIT_S(5);
+        // Modem_SMS_Send(buff_aux,"+51936910211"); // numero de ELVIS DE LA TORRE
+        WAIT_S(3);
         current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 
         // current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
@@ -1040,7 +1040,7 @@ static void Main_Task(void* pvParameters){
         // SEND CHECK READ DATA
         if ((pdTICKS_TO_MS(xTaskGetTickCount())/1000) >= MQTT_read_time){
 			current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-			MQTT_read_time+= 60;// cada 2min seg
+			MQTT_read_time+= 90;// cada 1.5min seg
 			// MQTT_Read();
             // current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
             WAIT_S(1);
