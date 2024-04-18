@@ -137,8 +137,8 @@ int m_get_alert_phone(char *cadena){
  */
 int m_get_temp_alert(ink_ble_report_t data){
     // Check alarm status
-    float t_min= (float)data.ble_info.limits.Tmin - 0.3;
-    float t_max= (float)data.ble_info.limits.Tmax + 0.3;
+    float t_min= (float)data.ble_info.limits.Tmin - 0.2;
+    float t_max= (float)data.ble_info.limits.Tmax + 0.2;
 
     if (data.ble_info.limits.mode ==0) {
         return ALARM_DEACTIVE;
@@ -157,7 +157,7 @@ int m_get_temp_alert(ink_ble_report_t data){
 
 void m_epoch_to_str(time_t rawtime, char* buffer, size_t len) {
     struct tm * timeinfo;
-    rawtime -=5*60; // -5 horas hora local
     timeinfo = localtime(&rawtime);
+    timeinfo->tm_hour = (timeinfo->tm_hour + 24 - 5) % 24;
     strftime(buffer, len, "%Y-%m-%d %H:%M:%S", timeinfo);
 }

@@ -374,7 +374,7 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg){
                     
                     // update state
 					list_ble_report.ls_ble[rep_idx].ready = 1;
-
+                    
                     /*---------CHECK RANGE TEMP--------*/
                     int ret_alarm = m_get_temp_alert(list_ble_report.ls_ble[rep_idx]);
                     if (ret_alarm == ALARM_ACTIVE){
@@ -696,11 +696,11 @@ void ALERT_send(uint8_t idx_ble){
 
         Modem_SMS_Send(buff_aux,phone_alrm.phone);
         current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
-        WAIT_S(2);
+        WAIT_S(5);
         current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
         Modem_SMS_Send(buff_aux,"+51989285671"); // numero de IVAN PROY
         // Modem_SMS_Send(buff_aux,"+51936910211"); // numero de ELVIS DE LA TORRE
-        WAIT_S(3);
+        WAIT_S(5);
         current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
 
         // current_time=pdTICKS_TO_MS(xTaskGetTickCount())/1000;
@@ -960,14 +960,14 @@ static void M95_Watchdog(void* pvParameters){
  * CIRCULINA TASK
 **********************************************/
 void AlarmTask(void *pvParameters) {
-
     data_alarm_t lst_alert_data[MAX_BLE_DEVICES]={0};
     data_alarm_t alert_data;
     while (1){
         if (xQueueReceive(AlertCircQueue, &alert_data, portMAX_DELAY) == pdTRUE) {
             // Se recibió un valor de sensor fuera de límites
+
             double interval = difftime( alert_data.time, lst_alert_data[alert_data.idx].time);
-            if (interval>= interval_circ*60){
+            if (interval>= (interval_circ*60)){
                 ESP_LOGE("GAP","alert device: %d",alert_data.idx);
                 lst_alert_data[alert_data.idx]=alert_data;
 
@@ -1184,5 +1184,6 @@ void app_main(void){
 		esp_restart();
 	}
 
+    
 }
 
