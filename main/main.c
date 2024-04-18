@@ -374,7 +374,7 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg){
                     
                     // update state
 					list_ble_report.ls_ble[rep_idx].ready = 1;
-                    
+
                     /*---------CHECK RANGE TEMP--------*/
                     int ret_alarm = m_get_temp_alert(list_ble_report.ls_ble[rep_idx]);
                     if (ret_alarm == ALARM_ACTIVE){
@@ -1183,7 +1183,5 @@ void app_main(void){
 		vTaskDelete(MAIN_task_handle);
 		esp_restart();
 	}
-
-    
 }
 

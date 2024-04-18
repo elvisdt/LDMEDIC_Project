@@ -2656,3 +2656,13 @@
 26032	26967	7351045680552362	D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/.bin_timestamp	3bf8cabe814063e9
 26967	27227	0	esp-idf/esptool_py/CMakeFiles/app_check_size	3ef994bb30f5d374
 26967	27227	0	D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/esptool_py/CMakeFiles/app_check_size	3ef994bb30f5d374
+379	610	0	esp-idf/esptool_py/CMakeFiles/app_check_size	3ef994bb30f5d374
+379	610	0	D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/esp-idf/esptool_py/CMakeFiles/app_check_size	3ef994bb30f5d374
+368	741	7346391500632188	bootloader-prefix/src/bootloader-stamp/bootloader-build	5c4625474e4c29a7
+368	741	7346391500632188	bootloader/bootloader.elf	5c4625474e4c29a7
+368	741	7346391500632188	bootloader/bootloader.bin	5c4625474e4c29a7
+368	741	7346391500632188	bootloader/bootloader.map	5c4625474e4c29a7
+368	741	7346391500632188	D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader-prefix/src/bootloader-stamp/bootloader-build	5c4625474e4c29a7
+368	741	7346391500632188	D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader/bootloader.elf	5c4625474e4c29a7
+368	741	7346391500632188	D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader/bootloader.bin	5c4625474e4c29a7
+368	741	7346391500632188	D:/PROJECTS_ESP_IDF/LDMEDIC_BLE_PROJECT/build/bootloader/bootloader.map	5c4625474e4c29a7
